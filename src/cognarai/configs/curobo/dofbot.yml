@@ -1,0 +1,66 @@
+##
+## Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+##
+## NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+## property and proprietary rights in and to this material, related
+## documentation and any modifications thereto. Any use, reproduction,
+## disclosure or distribution of this material and related documentation
+## without an express license agreement from NVIDIA CORPORATION or
+## its affiliates is strictly prohibited.
+##
+
+robot_cfg:
+  kinematics:
+    urdf_path: "dofbot.urdf"
+    usd_path: null
+    usd_robot_root:
+    isaac_usd_path: ""
+    usd_flip_joints: {}
+    usd_flip_joint_limits: []
+
+    asset_root_path:
+    
+    base_link: "base_link"
+    ee_links: ["link5"]
+    link_names: null
+    lock_joints: null
+    extra_links: null
+
+    
+    collision_link_names: ['link1','link2','link3','link4', 'link5'] # List[str]
+    collision_spheres:
+      link1:
+        - "center": [0.0, 0.0, 0.0]
+          "radius": 0.1
+      link2:
+        - "center": [-0.01, 0.002, 0.031]
+          "radius": 0.072
+      link3:
+        - "center": [-0.0, 0.0, -0.009]
+          "radius": 0.047
+      link4:
+        - "center": [0.0, -0.01, -0.001]
+          "radius": 0.047
+      link5:
+        - "center": [0.001, 0.001, 0.05]
+          "radius": 0.08
+
+
+    collision_sphere_buffer: 0.0
+    extra_collision_spheres: {}
+    self_collision_ignore: {
+      }
+    self_collision_buffer: {
+      } 
+      
+    use_global_cumul: True
+    mesh_link_names:  ['link1','link2','link3','link4', 'link5'] # List[str]
+
+    cspace:
+      joint_names: ['joint1', 'joint2', 'joint3', 'joint4']
+      retract_config:  [0.0, 0.0, 0.0, 0.03]
+      null_space_weight:  [1.0, 1.0, 1.0, 1.0]
+      cspace_distance_weight: [1.0, 1.0, 1.0, 1.0]
+      max_jerk: 500.0
+      max_acceleration: 12.0
+      position_limit_clip: 0.1

@@ -1,0 +1,8 @@
+{
+    "end_effector_frame_name": "ee_link",
+    "relative_asset_paths": {
+        "robot_description_path" : "../../../rmp/ur10/rmpflow/ur10_robot_description.yaml",
+        "urdf_path": "../../../rmp/ur10/ur10_robot.urdf",
+        "rrt_config_path" : "ur10_planner_config.yaml"
+    }
+}

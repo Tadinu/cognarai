@@ -1,0 +1,10 @@
+{
+    "end_effector_frame_name": "r_gripper_l_finger_link",
+    "maximum_substep_size" : 0.00167,
+    "ignore_robot_state_updates" : true,
+    "relative_asset_paths": {
+        "robot_description_path" : "pr2_robot_descriptor.yaml",
+        "urdf_path": "../lula_pr2.urdf",
+        "rmpflow_config_path" : "pr2_rmpflow_common.yaml"
+    }
+}

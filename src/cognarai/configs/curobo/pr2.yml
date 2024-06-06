@@ -1,0 +1,483 @@
+##
+## Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+##
+## NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+## property and proprietary rights in and to this material, related
+## documentation and any modifications thereto. Any use, reproduction,
+## disclosure or distribution of this material and related documentation
+## without an express license agreement from NVIDIA CORPORATION or
+## its affiliates is strictly prohibited.
+##
+
+robot_cfg:
+  kinematics:
+    use_usd_kinematics: True
+    load_link_names_with_mesh: True
+    urdf_path: "pr2.urdf"
+    isaac_usd_path: "/Isaac/Robots/PR2/pr2.usd"
+    usd_path: "pr2.usd"
+    usd_robot_root: "/pr2"
+    usd_flip_joints: {}
+    usd_flip_joint_limits: []
+    base_link: "base_footprint"
+    ee_links: ['r_gripper_l_finger_link', r_gripper_r_finger_link] #["l_gripper_palm_link", "r_gripper_palm_link"]
+    link_names:
+      [
+        'base_footprint', 'torso_lift_link', 'head_pan_link', 'head_tilt_link',
+        'l_shoulder_pan_link', 'l_shoulder_lift_link', 'l_upper_arm_roll_link', 'l_upper_arm_link', 'l_elbow_flex_link',
+        'l_forearm_roll_link', 'l_forearm_link', 'l_wrist_flex_link', 'l_wrist_roll_link', 'l_gripper_palm_link',
+        'r_shoulder_pan_link', 'r_shoulder_lift_link', 'r_upper_arm_roll_link', 'r_upper_arm_link', 'r_elbow_flex_link',
+        'r_forearm_roll_link', 'r_forearm_link', 'r_wrist_flex_link', 'r_wrist_roll_link', 'r_gripper_palm_link',
+        'laser_tilt_mount_link',
+        'bl_caster_rotation_link', 'bl_caster_l_wheel_link', 'bl_caster_r_wheel_link',
+        'br_caster_rotation_link', 'br_caster_l_wheel_link', 'br_caster_r_wheel_link',
+        'fl_caster_rotation_link', 'fl_caster_l_wheel_link',
+        'fr_caster_rotation_link', 'fr_caster_l_wheel_link',
+        'r_gripper_l_finger_link', 'r_gripper_l_finger_tip_link',
+        'r_gripper_r_finger_link', 'r_gripper_r_finger_tip_link',
+        'l_gripper_l_finger_link', 'l_gripper_l_finger_tip_link',
+        'l_gripper_r_finger_link', 'l_gripper_r_finger_tip_link'
+      ]
+    collision_link_names:
+      [
+        'base_footprint', 'torso_lift_link', 'head_pan_link', 'head_tilt_link',
+        'l_shoulder_pan_link', 'l_shoulder_lift_link', 'l_upper_arm_roll_link', 'l_upper_arm_link', 'l_elbow_flex_link',
+        'l_forearm_roll_link', 'l_forearm_link', 'l_wrist_flex_link', 'l_wrist_roll_link', 'l_gripper_palm_link',
+        'r_shoulder_pan_link', 'r_shoulder_lift_link', 'r_upper_arm_roll_link', 'r_upper_arm_link', 'r_elbow_flex_link',
+        'r_forearm_roll_link', 'r_forearm_link', 'r_wrist_flex_link', 'r_wrist_roll_link', 'r_gripper_palm_link',
+        'laser_tilt_mount_link',
+        'bl_caster_rotation_link', 'bl_caster_l_wheel_link', 'bl_caster_r_wheel_link',
+        'br_caster_rotation_link', 'br_caster_l_wheel_link', 'br_caster_r_wheel_link',
+        'fl_caster_rotation_link', 'fl_caster_l_wheel_link',
+        'fr_caster_rotation_link', 'fr_caster_l_wheel_link',
+        'r_gripper_l_finger_link', 'r_gripper_l_finger_tip_link',
+        'r_gripper_r_finger_link', 'r_gripper_r_finger_tip_link',
+        'l_gripper_l_finger_link', 'l_gripper_l_finger_tip_link',
+        'l_gripper_r_finger_link', 'l_gripper_r_finger_tip_link'
+      ]
+    collision_spheres:
+      base_footprint:
+        - "center": [ 0.0, 0.0, 0.0 ]
+          "radius": 0.4
+      torso_lift_link:
+        - "center": [ -0.05, -0.0, -0.1 ]
+          "radius": 0.2
+        - "center": [ -0.05, -0.0, -0.2 ]
+          "radius": 0.2
+        - "center": [ -0.05, -0.0, -0.3 ]
+          "radius": 0.2
+        - "center": [ -0.05, -0.0, -0.4 ]
+          "radius": 0.2
+        - "center": [ -0.05, -0.0, -0.5 ]
+          "radius": 0.2
+      head_pan_link:
+        - "center": [ 0.0, -0.05, 0.07 ]
+          "radius": 0.1
+        - "center": [ 0.0, 0.05, 0.07]
+          "radius": 0.1
+      head_tilt_link:
+        - "center": [ 0.0, -0.05, 0.01 ]
+          "radius": 0.1
+        - "center": [ 0.0, 0.05, 0.01 ]
+          "radius": 0.1
+      l_shoulder_pan_link:
+        - "center": [ -0.05, 0.0, 0.0 ]
+          "radius": 0.1
+        - "center": [ -0.05, 0.0, -0.1 ]
+          "radius": 0.1
+        - "center": [ -0.05, 0.0, -0.2 ]
+          "radius": 0.1
+        - "center": [ -0.05, 0.0, -0.3 ]
+          "radius": 0.1
+        - "center": [ -0.05, 0.0, -0.4 ]
+          "radius": 0.1
+        - "center": [ -0.05, 0.0, -0.5 ]
+          "radius": 0.1
+      l_shoulder_lift_link:
+        - "center": [ 0.05, 0.0, 0.0 ]
+          "radius": 0.08
+        - "center": [ 0.15, 0.0, 0.0 ]
+          "radius": 0.08
+        - "center": [ 0.2, 0.0, 0.0 ]
+          "radius": 0.08
+      l_upper_arm_roll_link:
+        - "center": [ 0.75, 0.0, 0.0 ]
+          "radius": 0.04
+      l_upper_arm_link:
+        - "center": [ 0.25, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.3, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.35, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.4, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.45, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.5, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.55, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.6, 0.0, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.65, 0.0, 0.0 ]
+          "radius": 0.05
+
+      l_elbow_flex_link:
+        - "center": [ 0.45, 0.0, 0.0 ]
+          "radius": 0.0
+      l_forearm_roll_link:
+        - "center": [ 0.5, 0.0, 0.0 ]
+          "radius": 0.0
+      l_forearm_link:
+        - "center": [ 0.55, 0.0, 0.0 ]
+          "radius": 0.0
+      l_wrist_flex_link:
+        - "center": [ 0.7, 0.0, 0.0 ]
+          "radius": 0.0
+      l_wrist_roll_link:
+        - "center": [ 0.75, 0.0, 0.0 ]
+          "radius": 0.0
+      l_gripper_palm_link:
+        - "center": [ 0.8, 0.0, 0.0 ]
+          "radius": 0.0
+      r_shoulder_pan_link:
+        - "center": [ -0.05, -0.02, 0.0 ]
+          "radius": 0.1
+        - "center": [ -0.05, -0.02, -0.1 ]
+          "radius": 0.1
+        - "center": [ -0.05, -0.02, -0.2]
+          "radius": 0.1
+        - "center": [ -0.05, -0.02, -0.3 ]
+          "radius": 0.1
+        - "center": [ -0.05, -0.02, -0.4 ]
+          "radius": 0.1
+        - "center": [ -0.05, -0.02, -0.5 ]
+          "radius": 0.1
+      r_shoulder_lift_link:
+        - "center": [ 0.05, -0.02, 0.0 ]
+          "radius": 0.08
+        - "center": [ 0.15, -0.02, 0.0 ]
+          "radius": 0.08
+        - "center": [ 0.2, -0.02, 0.0 ]
+          "radius": 0.08
+      r_upper_arm_roll_link:
+        - "center": [ 0.75, -0.03, 0.0 ]
+          "radius": 0.04
+      r_upper_arm_link:
+        - "center": [ 0.25, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.3, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.35, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.4, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.45, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.5, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.55, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.6, -0.03, 0.0 ]
+          "radius": 0.05
+        - "center": [ 0.65, -0.03, 0.0 ]
+          "radius": 0.05
+
+      r_elbow_flex_link:
+        - "center": [ 0.45, -0.03, 0.0 ]
+          "radius": 0.0
+      r_forearm_roll_link:
+        - "center": [ 0.5, -0.03, 0.0 ]
+          "radius": 0.0
+      r_forearm_link:
+        - "center": [ 0.55, -0.03, 0.0 ]
+          "radius": 0.0
+      r_wrist_flex_link:
+        - "center": [ 0.7, -0.03, 0.0 ]
+          "radius": 0.0
+      r_wrist_roll_link:
+        - "center": [ 0.75, -0.03, 0.0 ]
+          "radius": 0.0
+      r_gripper_palm_link:
+        - "center": [ 0.8, -0.03, 0.0 ]
+          "radius": 0.0
+      laser_tilt_mount_link:
+        - "center": [ 0.04893, 0.0, 0.0 ]
+          "radius": 0.0
+      bl_caster_rotation_link:
+        - "center": [ -0.2246, 0.2246, 0.0792 ]
+          "radius": 0.0
+      bl_caster_l_wheel_link:
+        - "center": [ -0.2246, 0.2736, 0.0792 ]
+          "radius": 0.0
+      bl_caster_r_wheel_link:
+        - "center": [ -0.2246, 0.1756, 0.0792]
+          "radius": 0.0
+      br_caster_rotation_link:
+        - "center": [ -0.2246, -0.2246, 0.0792]
+          "radius": 0.0
+      br_caster_l_wheel_link:
+        - "center": [ -0.2246, -0.1756, 0.0792]
+          "radius": 0.0
+      br_caster_r_wheel_link:
+        - "center": [ -0.2246, -0.2736, 0.0792 ]
+          "radius": 0.0
+      fl_caster_rotation_link:
+        - "center": [ 0.2246, 0.2246, 0.0792 ]
+          "radius": 0.0
+      fl_caster_l_wheel_link:
+        - "center": [ 0.2246, 0.2736, 0.0792 ]
+          "radius": 0.0
+      fr_caster_rotation_link:
+        - "center": [ 0.2246, -0.2246, 0.0792 ]
+          "radius": 0.0
+      fr_caster_l_wheel_link:
+        - "center": [ 0.2246, -0.1756, 0.0792 ]
+          "radius": 0.0
+      r_gripper_l_finger_link:
+        - "center": [ 0.84791, -0.178, 0.79067 ]
+          "radius": 0.0
+      r_gripper_l_finger_tip_link:
+        - "center": [ 0.93928, -0.17305, 0.79067 ]
+          "radius": 0.0
+      r_gripper_r_finger_link:
+        - "center": [ 0.84791, -0.198, 0.79067 ]
+          "radius": 0.0
+      r_gripper_r_finger_tip_link:
+        - "center": [ 0.93928, -0.20295, 0.79067 ]
+          "radius": 0.0
+      l_gripper_l_finger_link:
+        - "center": [ 0.84791, 0.198, 0.79067 ]
+          "radius": 0.0
+      l_gripper_l_finger_tip_link:
+        - "center": [ 0.93928, 0.20295, 0.79067 ]
+          "radius": 0.0
+      l_gripper_r_finger_link:
+        - "center": [ 0.84791, 0.178, 0.79067 ]
+          "radius": 0.0
+      l_gripper_r_finger_tip_link:
+        - "center": [ 0.93928, 0.17305, 0.79067 ]
+          "radius": 0.0
+    collision_sphere_buffer: 0.004 # 0.0025
+    extra_collision_spheres: {"attached_object": 4}
+    use_global_cumul: True
+    self_collision_ignore:
+      {
+      }
+
+    self_collision_buffer:
+      {
+      }
+    #link_names: ["panda_link4"]
+    mesh_link_names:
+      [
+        'base_footprint', 'torso_lift_link', 'head_pan_link', 'head_tilt_link',
+        'l_shoulder_pan_link', 'l_shoulder_lift_link', 'l_upper_arm_roll_link', 'l_upper_arm_link', 'l_elbow_flex_link',
+        'l_forearm_roll_link', 'l_forearm_link', 'l_wrist_flex_link', 'l_wrist_roll_link', 'l_gripper_palm_link',
+        'r_shoulder_pan_link', 'r_shoulder_lift_link', 'r_upper_arm_roll_link', 'r_upper_arm_link', 'r_elbow_flex_link',
+        'r_forearm_roll_link', 'r_forearm_link', 'r_wrist_flex_link', 'r_wrist_roll_link', 'r_gripper_palm_link',
+        'laser_tilt_mount_link',
+        'bl_caster_rotation_link', 'bl_caster_l_wheel_link', 'bl_caster_r_wheel_link',
+        'br_caster_rotation_link', 'br_caster_l_wheel_link', 'br_caster_r_wheel_link',
+        'fl_caster_rotation_link', 'fl_caster_l_wheel_link',
+        'fr_caster_rotation_link', 'fr_caster_l_wheel_link',
+        'r_gripper_l_finger_link', 'r_gripper_l_finger_tip_link',
+        'r_gripper_r_finger_link', 'r_gripper_r_finger_tip_link',
+        'l_gripper_l_finger_link', 'l_gripper_l_finger_tip_link',
+        'l_gripper_r_finger_link', 'l_gripper_r_finger_tip_link'
+      ]
+    lock_joints: {}
+    extra_links: {}
+    cspace:
+      joint_names: [
+        'bl_caster_l_wheel_joint',
+        'bl_caster_r_wheel_joint',
+        'bl_caster_rotation_joint',
+        'br_caster_l_wheel_joint',
+        'br_caster_r_wheel_joint',
+        'br_caster_rotation_joint',
+        'fl_caster_l_wheel_joint',
+        'fl_caster_r_wheel_joint',
+        'fl_caster_rotation_joint',
+        'fr_caster_l_wheel_joint',
+        'fr_caster_r_wheel_joint',
+        'fr_caster_rotation_joint',
+        'head_pan_joint',
+        'head_tilt_joint',
+        'l_elbow_flex_joint',
+        'l_forearm_roll_joint',
+        'l_gripper_joint',
+        'l_gripper_l_finger_joint',
+        'l_gripper_l_finger_tip_joint',
+        'l_gripper_motor_screw_joint',
+        'l_gripper_motor_slider_joint',
+        'l_gripper_r_finger_joint',
+        'l_gripper_r_finger_tip_joint',
+        'l_shoulder_lift_joint',
+        'l_shoulder_pan_joint',
+        'l_upper_arm_roll_joint',
+        'l_wrist_flex_joint',
+        'l_wrist_roll_joint',
+        'laser_tilt_mount_joint',
+        'r_elbow_flex_joint',
+        'r_forearm_roll_joint',
+        'r_gripper_joint',
+        'r_gripper_l_finger_joint',
+        'r_gripper_l_finger_tip_joint',
+        'r_gripper_motor_screw_joint',
+        'r_gripper_motor_slider_joint',
+        'r_gripper_r_finger_joint',
+        'r_gripper_r_finger_tip_joint',
+        'r_shoulder_lift_joint',
+        'r_shoulder_pan_joint',
+        'r_upper_arm_roll_joint',
+        'r_wrist_flex_joint',
+        'r_wrist_roll_joint',
+        'torso_lift_joint',
+        'torso_lift_motor_screw_joint'
+      ]
+
+      retract_config: [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+      null_space_weight: [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+      cspace_distance_weight: [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+      max_acceleration: 15.0
+      max_jerk: 500.0

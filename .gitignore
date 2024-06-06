@@ -1,0 +1,4 @@
+src/cognarai/_version.py
+src/cognarai/assets/
+src/cognarai.egg-info/
+src/cognarai/__pycache__/

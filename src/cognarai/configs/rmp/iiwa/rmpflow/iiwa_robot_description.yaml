@@ -1,0 +1,93 @@
+# The robot descriptor defines the generalized coordinates and how to map those
+# to the underlying URDF dofs.
+
+api_version: 1.0
+
+# Defines the generalized coordinates. Each generalized coordinate is assumed
+# to have an entry in the URDF.
+# Lula will only use these joints to control the robot position.
+cspace:
+    - iiwa7_joint_1
+    - iiwa7_joint_2
+    - iiwa7_joint_3
+    - iiwa7_joint_4
+    - iiwa7_joint_5
+    - iiwa7_joint_6
+    - iiwa7_joint_7
+
+default_q: [
+    0.0,
+    -0.78,
+    0.0,
+    -1.4,
+    0.0,
+    0.6,
+    2.1
+]
+
+# Most dimensions of th,e cspace have a direct corresponding element
+# in the URDF. This list of rules defines how unspecified coordinates
+# should be extracted or how values in the URDF should be overwritten.
+
+cspace_to_urdf_rules:
+
+# Lula uses collision spheres to define the robot geometry in order to avoid
+# collisions with external obstacles.  If no spheres are specified, Lula will
+# not be able to avoid obstacles.
+
+collision_spheres:
+  - iiwa7_link_0:
+    - "center": [0.0, 0.0, 0.05]
+      "radius": 0.10
+  - iiwa7_link_1:
+    - "center": [ 0.0, 0.0, 0.0 ]
+      "radius": 0.08
+    - "center": [ 0.0, -0.05, 0.1 ]
+      "radius": 0.07
+    - "center": [ 0.0, -0.05, 0.18 ]
+      "radius": 0.08
+  - iiwa7_link_2:
+    - "center": [0.0, 0.0, 0.0]
+      "radius": 0.08
+    - "center": [0.0, 0.02, 0.06]
+      "radius": 0.07
+    - "center": [0.0, 0.1, 0.03]
+      "radius": 0.07
+    - "center": [0.0, 0.18, 0.0]
+      "radius": 0.08
+  - iiwa7_link_3:
+    - "center": [0.0, 0.0, 0.08]
+      "radius": 0.08
+    - "center": [0.0, 0.06, 0.16]
+      "radius": 0.07
+    - "center": [0.0, 0.05, 0.22]
+      "radius": 0.07
+  - iiwa7_link_4:
+    - "center": [0.0, 0.0, 0.0]
+      "radius": 0.08
+    - "center": [0.0, 0.0, 0.05]
+      "radius": 0.07
+    - "center": [0.0, 0.07, 0.05]
+      "radius": 0.06
+    - "center": [0.0, 0.11, 0.03]
+      "radius": 0.06
+    - "center": [0.0, 0.15, 0.01]
+      "radius": 0.07
+  - iiwa7_link_5:
+    - "center": [0.0, 0.0, 0.02]
+      "radius": 0.08
+    - "center": [0.0, 0.03, 0.07]
+      "radius": 0.06
+    - "center": [0.0, 0.08, 0.13]
+      "radius": 0.05
+  - iiwa7_link_6:
+    - "center": [0.0, 0.0, 0.0]
+      "radius": 0.06
+    - "center": [0., 0., 0.05]
+      "radius": 0.08
+    - "center": [0., -0.04, 0.075]
+      "radius": 0.06
+    - "center": [0., 0.08, 0.06]
+      "radius": 0.065
+    - "center": [0., 0.16, 0.06]
+      "radius": 0.05
