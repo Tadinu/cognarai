@@ -39,14 +39,12 @@ class UR10(OmniRobot):
         orientation: Optional[Sequence[float]] = None,
         scale: Optional[Sequence[float]] = None,
         attach_extra_gripper: bool = True,
-        gripper_model_name: Optional[str] = None,
         gripper_open_position: Optional[np.ndarray] = None,
         gripper_closed_position: Optional[np.ndarray] = None,
         gripper_fingers_deltas: Optional[np.ndarray] = None,
         visible: bool = True
     ) -> None:
-        if gripper_model_name is None:
-            gripper_model_name = SHORT_SUCTION_GRIPPER_MODEL
+        gripper_model_name = IsaacCommon().get_robot_gripper_model_name(robot_model_name)
         super().__init__(robot_model_name=robot_model_name,
                          description_path=description_path,
                          prim_path=prim_path, name=name, articulation_root_path=articulation_root_path,
@@ -56,12 +54,12 @@ class UR10(OmniRobot):
                          orientation=orientation,
                          scale=scale,
                          attach_extra_gripper=attach_extra_gripper,
-                         gripper_model_name=gripper_model_name,
                          gripper_open_position=gripper_open_position,
                          gripper_closed_position=gripper_closed_position,
                          gripper_fingers_deltas=gripper_fingers_deltas,
                          rmp_policy_name="RMPflow",
-                         rmp_policy_with_gripper_name="RMPflowSuction" if gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL
+                         rmp_policy_with_gripper_name="RMPflowSuction" if (gripper_model_name == LONG_SUCTION_GRIPPER_MODEL
+                                                                           or gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL)
                                                       else "RMPflowCortex",
                          visible=visible)
         if robot_model_name.startswith(UR10E_MODEL):
@@ -75,7 +73,7 @@ class UR10(OmniRobot):
             import pathlib
             assert pathlib.Path(self.lula_description_path).exists()
         else:
-            if gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL:
+            if gripper_model_name == LONG_SUCTION_GRIPPER_MODEL or gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL:
                 self.cspace_description_path = os.path.join(self.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY,
                                                             "ur10", "rmpflow_suction", "ur10_robot_description.yaml")
                 self.lula_description_path = os.path.join(self.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY,

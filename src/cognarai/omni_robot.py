@@ -1,12 +1,19 @@
 from __future__ import annotations
 import logging
 
+from lula import Obstacle
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 import pathlib
 from typing_extensions import List, Optional, Sequence, Union, Tuple
 
 # Omniverse
 import numpy as np
+from omni.isaac.core.prims.xform_prim import XFormPrim
 from omni.isaac.core.prims.rigid_prim import RigidPrim
+from omni.isaac.core.objects import VisualCapsule
 from omni.isaac.core.robots.robot import Robot
 from omni.isaac.core.articulations import Articulation, ArticulationGripper
 from omni.isaac.core.utils.prims import get_prim_at_path, is_prim_path_valid
@@ -23,9 +30,9 @@ from .isaac_common import IsaacCommon
 from .path_planning_controller import PathRRTController
 from .pick_place_controller import PickPlaceController
 from .stacking_controller import StackingController
-from .omni_robot_task import OmniStackTask, OmniTargetFollowTask, OmniPathPlanningTask
 from .rmpflow_controller import RMPFlowController
-from .omni_robot_task import OmniStackTask, OmniTargetFollowTask
+from .omni_robot_task import OmniSimpleStackingTask, OmniTargetFollowingTask, OmniPathPlanningTask
+from .omni_robot_hanoi_tower_task import OmniHanoiTowerTask
 
 
 class OmniRobot(Robot):
@@ -77,7 +84,7 @@ class OmniRobot(Robot):
         # 1- Robot prim from [usd_path] if not existing
         if not is_prim_path_valid(prim_path):
             robot_prim = add_reference_to_stage(
-                usd_path=self.isaac_common.get_robot_default_full_usd_path(robot_model_name),
+                usd_path=self.isaac_common.get_entity_default_full_usd_path(robot_model_name),
                 prim_path=prim_path)
             assert robot_prim
         super().__init__(prim_path=articulation_root_path, name=name,
@@ -86,6 +93,7 @@ class OmniRobot(Robot):
                          orientation=orientation,
                          scale=scale,
                          visible=visible)
+        XFormPrim(prim_path).set_world_pose(position=position, orientation=orientation)
         self.articulation_root_path: str = articulation_root_path
         self.description_path: str = description_path  # udrf, mjcf
         self.lula_description_path: str = ""  # lula urdf, mjcf
@@ -115,14 +123,14 @@ class OmniRobot(Robot):
         has_builtin_gripper = self.isaac_common.has_builtin_gripper_model(robot_model_name)
         if attach_extra_gripper:
             gripper_model_name = self.isaac_common.get_robot_gripper_model_name(robot_model_name)
-            gripper_usd_path = self.isaac_common.get_robot_default_full_usd_path(gripper_model_name)
+            gripper_usd_path = self.isaac_common.get_entity_default_full_usd_path(gripper_model_name)
             if gripper_usd_path:
-                from .isaac_common import SHORT_SUCTION_GRIPPER_MODEL
-                if gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL:
+                from .isaac_common import LONG_SUCTION_GRIPPER_MODEL, SHORT_SUCTION_GRIPPER_MODEL
+                if gripper_model_name == LONG_SUCTION_GRIPPER_MODEL or gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL:
                     #NOTE:If attaching to [end_effector_prim_path], gripper usd should not already have articulation configured
                     add_reference_to_stage(usd_path=gripper_usd_path, prim_path=self.end_effector_prim_path)
             elif not has_builtin_gripper:
-                logging.error(f"[{robot_model_name}:{self.robot_unique_name}] has no gripper model [{gripper_model_name}]'s usd configured")
+                logger.error(f"[{robot_model_name}:{self.robot_unique_name}] has no gripper model [{gripper_model_name}]'s usd configured")
 
         # 3.2- Instantiate Gripper from class (SurfaceGripper, ParallelGripper, ArticulationGripper, etc.)
         if attach_extra_gripper or (has_builtin_gripper and not self.assembled_body):
@@ -144,15 +152,15 @@ class OmniRobot(Robot):
                 )
             elif issubclass(gripper_class, ArticulationGripper):
                 assert self.isaac.get_robot_articulation_info(self.gripper_articulation_root_path), \
-                    f"An articulation should have been added at {self.gripper_articulation_root_path}"
+                    f"No dynamic control interface configured for articulation: {self.gripper_articulation_root_path}"
                 self._gripper = gripper_class(
                     gripper_dof_names=self.isaac_common.get_gripper_finger_joint_names(robot_model_name),
                     gripper_open_position=gripper_open_position,
                     gripper_closed_position=gripper_closed_position
                 )
             else:
-                logging.warning(f"{self.robot_unique_name}[{self.robot_model_name}] - {gripper_model_name}: "
-                                f"Invalid gripper class {gripper_class}")
+                logger.warning(f"{self.robot_unique_name}[{self.robot_model_name}] - {gripper_model_name}: "
+                               f"Invalid gripper class {gripper_class}")
 
         # 4- Camera
         self.camera = self.isaac.spawn_camera(f"{self.end_effector_prim_path}/Camera",
@@ -177,7 +185,7 @@ class OmniRobot(Robot):
 
     def initialize(self, physics_sim_view=None) -> None:
         """Auto-invoked by world.reset()"""
-        print(f"Initialize [{self.robot_model_name}]: Robot[{self.robot_unique_name}] - gripper[{self._gripper}]")
+        logger.info(f"Initialize [{self.robot_model_name}]: Robot[{self.robot_unique_name}] - gripper[{self._gripper}]")
         super().initialize(physics_sim_view)
 
         # Init EE
@@ -212,8 +220,14 @@ class OmniRobot(Robot):
             self.rmp_flow_controller = RMPFlowController(name=f"{self.name}_rmp_flow_controller",
                                                          robot_articulation=self,
                                                          attach_extra_gripper=True if self._gripper else False)
+            for _, objects in self.isaac.objects.items():
+                for object in objects:
+                    self.rmp_register_obstacle(object)
             #self.path_rrt_controller = PathRRTController(name=f"{self.name}_path_rrt_controller",
             #                                              robot_articulation=self)
+
+    def update(self) -> None:
+        self.rmp_update()
 
     def post_reset(self) -> None:
         """[summary]"""
@@ -252,12 +266,35 @@ class OmniRobot(Robot):
     def get_custom_gains(self) -> Tuple[np.array, np.array]:
         return np.zeros, np.zeros
 
+    def rmp_update(self):
+        if self.rmp_flow_controller:
+            # https://docs.omniverse.nvidia.com/isaacsim/latest/advanced_tutorials/tutorial_motion_generation_rmpflow.html
+            rmpflow = self.rmp_flow_controller.rmp_flow
+            # Track any movements of the sphere obstacle
+            rmpflow.update_world()
+
+            #Track any movements of the robot base
+            robot_base_translation, robot_base_orientation = self.get_world_pose()
+            rmpflow.set_robot_base_pose(robot_base_translation, robot_base_orientation)
+
+    def rmp_register_obstacle(self, obstacle: XFormPrim):
+        if self.rmp_flow_controller:
+            position, orientation = obstacle.get_world_pose()
+            obstacle_visual = VisualCapsule(
+                prim_path=f"{obstacle.prim_path}/visual",
+                position=position,
+                orientation=orientation,
+                radius=0.1,
+                height=0.5
+            )
+            self.rmp_flow_controller.rmp_flow.add_capsule(obstacle_visual)
+
     def create_target_following_task(self, task_name: str,
                                      target_name: Optional[str] = None,
                                      target_prim_path: Optional[str] = None,
                                      target_position: Optional[np.ndarray] = None,
                                      target_orientation: Optional[np.ndarray] = None,
-                                     offset: Optional[np.ndarray] = None) -> OmniTargetFollowTask:
+                                     offset: Optional[np.ndarray] = None) -> OmniTargetFollowingTask:
         """
         Args:
             task_name (str, optional): [description].
@@ -268,7 +305,7 @@ class OmniRobot(Robot):
             offset (Optional[np.ndarray], optional): [description]. Defaults to None.
         """
         # NOTE: This does not create task params yet, refer to FollowTarget class, which will be done in set_up_scene()
-        return OmniTargetFollowTask(robot=self,
+        return OmniTargetFollowingTask(robot=self,
                                     name=task_name,
                                     target_name=target_name,
                                     target_prim_path=target_prim_path,
@@ -300,12 +337,18 @@ class OmniRobot(Robot):
                                     target_orientation=target_orientation,
                                     offset=offset)
 
-    def create_stacking_task(self, task_name: str,
-                             target_position: Optional[np.ndarray] = None,
-                             cube_size: Optional[np.ndarray] = None,
-                             offset: Optional[np.ndarray] = None, ) -> OmniStackTask:
-        return OmniStackTask(robot=self,
-                             name=task_name,
-                             target_position=target_position,
-                             cube_size=cube_size,
-                             offset=offset)
+    def create_simple_stacking_task(self, task_name: str,
+                                    target_position: Optional[np.ndarray] = None,
+                                    cube_size: Optional[np.ndarray] = None,
+                                    offset: Optional[np.ndarray] = None, ) -> OmniSimpleStackingTask:
+        return OmniSimpleStackingTask(robot=self,
+                                      name=task_name,
+                                      target_position=target_position,
+                                      cube_size=cube_size,
+                                      offset=offset)
+
+    def create_hanoi_tower_task(self, task_name: str,
+                                offset: Optional[np.ndarray] = None, ) -> OmniHanoiTowerTask:
+        return OmniHanoiTowerTask(robot=self,
+                                  name=task_name,
+                                  offset=offset)

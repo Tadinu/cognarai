@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .omni_robot import OmniRobot
 
 
-class OmniTargetFollowTask(FollowTarget):
+class OmniTargetFollowingTask(FollowTarget):
 
     def __init__(self, name: str, robot: OmniRobot,
                  target_prim_path: Optional[str] = None,
@@ -80,7 +80,7 @@ class OmniTargetFollowTask(FollowTarget):
         self._move_task_objects_to_their_frame()
 
 
-class OmniStackTask(Stacking):
+class OmniSimpleStackingTask(Stacking):
     """[summary]
 
     Args:
