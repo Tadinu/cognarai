@@ -50,6 +50,7 @@ UR5_MODEL = "ur5"
 UR5E_MODEL = "ur5e"
 UR10_MODEL = "ur10"
 UR10_WITH_LONG_SUCTION_MODEL = "ur10_long_suction"
+UR10_WITH_SHORT_SUCTION_MODEL = "ur10_short_suction"
 UR10E_MODEL = "ur10e"
 UR16E_MODEL = "ur16e"
 COBOTTA_PRO_900_MODEL = "cobotta_pro_900"
@@ -62,6 +63,7 @@ IIWA_MODEL = "iiwa"
 
 # HANDS/GRIPPERS
 ALLEGRO_HAND_MODEL = "allegro_hand"
+LONG_SUCTION_GRIPPER_MODEL = "long_gripper"
 SHORT_SUCTION_GRIPPER_MODEL = "short_gripper"
 ROBOTIQ_2F85_MODEL = "robotiq_2f_85"
 ROBOTIQ_2F140_MODEL = "robotiq_2f_140"
@@ -87,7 +89,7 @@ FULL_WAREHOUSE_MODEL = "full_warehouse"
 RUBIKS_CUBE_MODEL = "rubiks_cube"
 SIMPLE_ROOM_MODEL = "simple_room"
 IAI_KITCHEN_MODEL = "kitchen"
-
+UR10_MOUNT_MODEL = "ur10_mount"
 
 
 class IsaacCommon(object, metaclass=Singleton):
@@ -102,7 +104,7 @@ class IsaacCommon(object, metaclass=Singleton):
 
         #: Supported articulation models, only of which the articulation view & controller are loaded
         self.SUPPORTED_ARTICULATION_MODELS: List[str] = [UR5_MODEL, UR5E_MODEL, UR5_ROBOTIQ_2F_85_MODEL, UR5E_ROBOTIQ_2F_140_MODEL,
-                                                         UR10_MODEL, UR10E_MODEL, UR10_WITH_LONG_SUCTION_MODEL, UR10E_ROBOTIQ_2F_140_MODEL,
+                                                         UR10_MODEL, UR10E_MODEL, UR10_WITH_LONG_SUCTION_MODEL, UR10_WITH_SHORT_SUCTION_MODEL, UR10E_ROBOTIQ_2F_140_MODEL,
                                                          UR10E_ALLEGRO_MODEL,
                                                          FRANKA_MODEL, FRANKA_WITH_ALT_FINGERS_MODEL,
                                                          IIWA_MODEL, IIWA_ALLEGRO_MODEL,
@@ -123,7 +125,7 @@ class IsaacCommon(object, metaclass=Singleton):
                                                        FRANKA_MODEL, FRANKA_WITH_ALT_FINGERS_MODEL, FRANKA_ROBOTIQ_2F_140_MODEL,
                                                        KINOVA_GEN3_MODEL, JACO2_MODEL, DOFBOT_MODEL,
                                                        UR5_ROBOTIQ_2F_85_MODEL, UR5E_ROBOTIQ_2F_140_MODEL, UR10E_ROBOTIQ_2F_140_MODEL,
-                                                       UR10E_ALLEGRO_MODEL, UR10_WITH_LONG_SUCTION_MODEL,
+                                                       UR10E_ALLEGRO_MODEL, UR10_WITH_LONG_SUCTION_MODEL, UR10_WITH_SHORT_SUCTION_MODEL,
                                                        IIWA_ALLEGRO_MODEL]
 
         #: Path to the external directory where Isaac assets (urdf, cads, usd, etc.) are stored
@@ -143,7 +145,7 @@ class IsaacCommon(object, metaclass=Singleton):
 
         #: Dictionary of USD paths of robot and object models, keyed by model names. Ref: https://docs.omniverse.nvidia.com/isaacsim/latest/features/environment_setup/assets/usd_assets_robots.html
         self.USD_PATHS: Dict[str, str] = {model_name: f"{IsaacCommon.NUCLEUS_ASSETS_DIR}/{usd_path}"
-                                                      if usd_path.startswith("Robots/") else usd_path
+                                                      if "/" in usd_path else usd_path
                                                       for model_name, usd_path in
             {
                 # Robots
@@ -168,6 +170,7 @@ class IsaacCommon(object, metaclass=Singleton):
                 UR5E_ROBOTIQ_2F_140_MODEL: "ur5e_robotiq_2f_140.usdc",
                 UR10_MODEL: "Robots/UR10/ur10.usd",
                 UR10_WITH_LONG_SUCTION_MODEL: "Robots/UR10/ur10_long_suction.usd",
+                UR10_WITH_SHORT_SUCTION_MODEL: "Robots/UR10/ur10_short_suction.usd",
                 UR10E_MODEL: "Robots/UniversalRobots/ur10e/ur10e.usd",
                 UR10E_ROBOTIQ_2F_140_MODEL: "ur10e_robotiq_2f_140.usd",
                 UR16E_MODEL: "Robots/UniversalRobots/ur16e/ur16e.usd",
@@ -182,6 +185,7 @@ class IsaacCommon(object, metaclass=Singleton):
                 # Grippers
                 ALLEGRO_HAND_MODEL: "Robots/AllegroHand/allegro_hand.usd",
                 #IIWA_ALLEGRO_MODEL: "iiwa_allegro.usd",
+                LONG_SUCTION_GRIPPER_MODEL: "Robots/UR10/Props/long_gripper.usd",
                 SHORT_SUCTION_GRIPPER_MODEL: "Robots/UR10/Props/short_gripper.usd",
                 ROBOTIQ_2F85_MODEL: "Robots/Robotiq/2F-85/2f85_instanceable.usd",
                 ROBOTIQ_2F140_MODEL: "robotiq_2f_140.usdc", #"Robots/Robotiq/2F-140/2f140_instanceable.usd",
@@ -194,6 +198,7 @@ class IsaacCommon(object, metaclass=Singleton):
                 EVOBOT_MODEL: "Robots/Evobot/evobot.usd",
 
                 # Objects
+                UR10_MOUNT_MODEL: "Props/Mounts/ur10_mount.usd",
                 SIMPLE_ROOM_MODEL: "Environments/Simple_Room/simple_room.usd",
                 SIMPLE_WAREHOUSE_MODEL: "Environments/Simple_Warehouse/warehouse.usd",
                 FULL_WAREHOUSE_MODEL: "Environments/Simple_Warehouse/full_warehouse.usd",
@@ -225,6 +230,7 @@ class IsaacCommon(object, metaclass=Singleton):
             UR10E_MODEL: UR10,
             UR10E_ROBOTIQ_2F_140_MODEL: UR10,
             UR10_WITH_LONG_SUCTION_MODEL: UR10,
+            UR10_WITH_SHORT_SUCTION_MODEL: UR10,
             UR10E_ALLEGRO_MODEL: UR10,
             DOFBOT_MODEL: DofBot,
             IIWA_MODEL: IIWA,
@@ -247,6 +253,7 @@ class IsaacCommon(object, metaclass=Singleton):
         #: Dictionary of model-wise gripper classes, keyed by gripper model names
         self.GRIPPER_CLASSES: Dict[str, Type[Union[Gripper, ArticulationGripper]]] = {
             SHORT_SUCTION_GRIPPER_MODEL: SurfaceGripper,
+            LONG_SUCTION_GRIPPER_MODEL: SurfaceGripper,
             PR2_MODEL: ParallelGripper,
             FRANKA_MODEL: ParallelGripper,
             FRANKA_WITH_ALT_FINGERS_MODEL: ParallelGripper,
@@ -257,9 +264,11 @@ class IsaacCommon(object, metaclass=Singleton):
             UR5_ROBOTIQ_2F_85_MODEL: ParallelGripper,
             UR5E_ROBOTIQ_2F_140_MODEL: ParallelGripper,
             UR10_WITH_LONG_SUCTION_MODEL: SurfaceGripper,
+            UR10_WITH_SHORT_SUCTION_MODEL: SurfaceGripper,
             UR10E_ROBOTIQ_2F_140_MODEL: ParallelGripper,
-            #ALLEGRO_HAND_MODEL: ArticulationGripper,
-            #IIWA_ALLEGRO_MODEL: ArticulationGripper,
+            ALLEGRO_HAND_MODEL: ArticulationGripper,
+            UR10E_ALLEGRO_MODEL: ArticulationGripper,
+            IIWA_ALLEGRO_MODEL: ArticulationGripper,
             SHADOW_HAND_MODEL: ArticulationGripper
         }
 
@@ -318,6 +327,7 @@ class IsaacCommon(object, metaclass=Singleton):
             UR5_ROBOTIQ_2F_85_MODEL: UR5_MODEL,
             UR5E_ROBOTIQ_2F_140_MODEL: UR5E_MODEL,
             UR10_WITH_LONG_SUCTION_MODEL: UR10_MODEL,
+            UR10_WITH_SHORT_SUCTION_MODEL: UR10_MODEL,
             FRANKA_ROBOTIQ_2F_140_MODEL: FRANKA_MODEL,
             IIWA_ALLEGRO_MODEL: IIWA_MODEL,
             UR10E_ALLEGRO_MODEL: UR10E_MODEL,
@@ -331,6 +341,8 @@ class IsaacCommon(object, metaclass=Singleton):
             UR5E_ROBOTIQ_2F_140_MODEL: ROBOTIQ_2F140_MODEL,
             UR10E_ROBOTIQ_2F_140_MODEL: ROBOTIQ_2F140_MODEL,
             FRANKA_ROBOTIQ_2F_140_MODEL: ROBOTIQ_2F140_MODEL,
+            UR10_WITH_LONG_SUCTION_MODEL: LONG_SUCTION_GRIPPER_MODEL,
+            UR10_WITH_SHORT_SUCTION_MODEL: SHORT_SUCTION_GRIPPER_MODEL,
             ALLEGRO_HAND_MODEL: ALLEGRO_HAND_MODEL,
             IIWA_ALLEGRO_MODEL: ALLEGRO_HAND_MODEL,
             UR10E_ALLEGRO_MODEL: ALLEGRO_HAND_MODEL,
@@ -347,6 +359,7 @@ class IsaacCommon(object, metaclass=Singleton):
             UR10E_MODEL: "ur10e.yml",
             UR10E_ROBOTIQ_2F_140_MODEL: "ur10e.yml",
             UR10_WITH_LONG_SUCTION_MODEL: "ur10.yml",
+            UR10_WITH_SHORT_SUCTION_MODEL: "ur10.yml",
             UR10E_ALLEGRO_MODEL: "ur10e_allegro_hand.yml",
             FRANKA_MODEL: "franka.yml",
             IIWA_MODEL: "iiwa.yml",
@@ -378,8 +391,8 @@ class IsaacCommon(object, metaclass=Singleton):
     def has_usd(self, entity_model_name: str) -> bool:
         return entity_model_name in self.USD_PATHS
 
-    def get_robot_default_full_usd_path(self, robot_model_name: str) -> str:
-        return self.get_usd_full_path(self.USD_PATHS.get(robot_model_name))
+    def get_entity_default_full_usd_path(self, entity_model_name: str) -> str:
+        return self.get_usd_full_path(self.USD_PATHS.get(entity_model_name))
 
     def is_supported_robot_model(self, entity_model_name: str) -> bool:
         """

@@ -30,12 +30,15 @@ from usdrt import Usd
 from omni.isaac.core.robots import Robot
 from omni.isaac.core.objects import sphere
 from omni.isaac.core.tasks import BaseTask
+from omni.isaac.core.prims.xform_prim import XFormPrim
+from omni.isaac.core.prims.rigid_prim import RigidPrim
 from omni.isaac.core.articulations import Articulation, ArticulationGripper
 from omni.isaac.core.utils.types import ArticulationAction
-from omni.isaac.core.utils.viewports import set_camera_view
+from omni.isaac.core.utils.rotations import euler_angles_to_quat
 from omni.isaac.core.utils.stage import add_reference_to_stage, get_stage_units
+from omni.isaac.core.utils.viewports import set_camera_view
 from omni.isaac.core.utils.semantics import add_update_semantics
-from omni.isaac.core.utils.prims import get_prim_at_path, is_prim_path_valid
+from omni.isaac.core.utils.prims import create_prim, get_prim_at_path, is_prim_path_valid
 import omni.isaac.core.utils.numpy.rotations as rotation_utils
 from omni.isaac.core.utils.string import find_unique_string_name
 from omni.isaac.robot_assembler import AssembledRobot, RobotAssembler
@@ -152,6 +155,10 @@ class Isaac(object, metaclass=Singleton):
         self.EXAMPLE_GRIPPER: Articulation = None
         self.assembled_count: float = 0.0
         self.isaac_common = IsaacCommon()
+        # Robots & objects spawned into the world
+        self.robots: Dict[str, List[OmniRobot]] = {}
+        self.objects: Dict[str, List[XFormPrim]] = {}
+
         self.omni_world = None
         self.omni_stage = None
         self.tensor_device = TensorDeviceType()
@@ -313,6 +320,54 @@ class Isaac(object, metaclass=Singleton):
         q = torch.rand((10, kinematics_model.get_dof()), **(self.tensor_device.as_torch_dict()))
         return kinematics_model.get_state(q, ee_link_name)
 
+    def spawn_object(self, world: omni.isaac.core.World,
+                     object_model_name: str,
+                     object_prim_path: str,
+                     position: np.array = np.array([0, 0, 0]),
+                     orientation: np.array = np.array(euler_angles_to_quat([0, 0, 0], degrees=True))) -> Optional[RigidPrim]:
+        if not self.isaac_common.has_usd(object_model_name):
+            logging.error(f"Object [{object_model_name}] does not have USD model configured")
+            return None
+
+        if not is_prim_path_valid(object_prim_path):
+            object_usd_prim = create_prim(prim_path=object_prim_path, prim_type="Xform", position=position)
+            add_reference_to_stage(usd_path=self.isaac_common.get_entity_default_full_usd_path(object_model_name),
+                                   prim_path=object_prim_path)
+            # Gravity: disabled
+            rigidBodyAPI = PhysxSchema.PhysxRigidBodyAPI.Apply(object_usd_prim)
+            rigidBodyAPI.CreateDisableGravityAttr(True)
+
+            # Collision: enabled
+            collisionAPI = UsdPhysics.CollisionAPI.Apply(object_usd_prim)
+            collisionAPI.CreateCollisionEnabledAttr().Set(True)
+
+            # Mass: set mass and inertia
+            massAPI = UsdPhysics.MassAPI.Apply(object_usd_prim)
+            massAPI.CreateMassAttr().Set(0.01)
+            #massAPI.CreateDiagonalInertiaAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+            #massAPI.CreateCenterOfMassAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+
+        # Make objec rigid prim to set its world pose
+        object = RigidPrim(name=f"{Path(object_prim_path).name}_0", prim_path=object_prim_path, mass=0.1, position=position,
+                           orientation=orientation)
+        object.set_world_pose(position=position, orientation=orientation)
+
+        # Add object to scene
+        world.scene.add(object)
+        logging.info(f"Object [{object.name}] has been spawned at path [{object_prim_path}]")
+
+        # Append to [self.objects]
+        if object_model_name not in self.objects:
+            self.objects[object_model_name] = []
+        self.objects[object_model_name].append(object)
+
+        # Register [object] as rmp-obstacle to all robots
+        for _, robots in self.robots.items():
+            for robot in robots:
+                robot.rmp_register_obstacle(object)
+
+        return object
+
     def spawn_robot(self, world: omni.isaac.core.World,
                     robot_model_name: str,
                     robot_description_path: str,
@@ -334,6 +389,7 @@ class Isaac(object, metaclass=Singleton):
             logging.error(f"Unrecognized robot description path extension: {Path(robot_description_path).suffix}")
             return None
 
+        # Import configs
         import_config.merge_fixed_joints = False  # NOTE This must be false for ur, franka
         import_config.convex_decomp = False
         import_config.import_inertia_tensor = True
@@ -425,16 +481,21 @@ class Isaac(object, metaclass=Singleton):
                     color=np.array([0, 0.8, 0.2]),
                 )
                 world.scene.add(sp)
+
+        # Append to [self.robots]
+        if robot_model_name not in self.robots:
+            self.robots[robot_model_name] = []
+        self.robots[robot_model_name].append(robot)
         return robot
 
     def spawn_example_assembled_robot(self, robot_model_name: str = UR10E_MODEL,
                                       gripper_model_name: str = ROBOTIQ_2F85_MODEL):
         base_robot_path = f"/World/{robot_model_name}"
         attach_robot_path = f"/World/{gripper_model_name}"
-        add_reference_to_stage(usd_path=self.isaac_common.get_robot_default_full_usd_path(robot_model_name),
+        add_reference_to_stage(usd_path=self.isaac_common.get_entity_default_full_usd_path(robot_model_name),
                                prim_path=base_robot_path)
         XFormPrim(base_robot_path).set_world_pose(np.array([1.0, 0.0, 3.0]))
-        add_reference_to_stage(usd_path=self.isaac_common.get_robot_default_full_usd_path(gripper_model_name),
+        add_reference_to_stage(usd_path=self.isaac_common.get_entity_default_full_usd_path(gripper_model_name),
                                prim_path=attach_robot_path)
         XFormPrim(attach_robot_path).set_world_pose(np.array([-1.0, 0.0, 3.0]))
         base_robot_mount_frame = f"/{self.isaac_common.get_robot_ee_mount_frame_name(robot_model_name)}"
@@ -482,7 +543,7 @@ class Isaac(object, metaclass=Singleton):
             logging.error(f"[spawn_assembled_robot()][{robot_model_name}:{robot_prim_path}] already exists")
             return None
         robot_base_body_model_name = self.isaac_common.get_robot_base_body_model_name(robot_model_name)
-        assert add_reference_to_stage(usd_path=self.isaac_common.get_robot_default_full_usd_path(robot_base_body_model_name),
+        assert add_reference_to_stage(usd_path=self.isaac_common.get_entity_default_full_usd_path(robot_base_body_model_name),
                                       prim_path=robot_prim_path)
         XFormPrim(robot_prim_path).set_world_pose(np.array([1.0, 0.0, 0.5]))
 
@@ -491,7 +552,7 @@ class Isaac(object, metaclass=Singleton):
         gripper_prim_path = find_unique_string_name(
             initial_name=f"/World/{gripper_model_name}", is_unique_fn=lambda x: not is_prim_path_valid(x)
         )
-        gripper_usd_path = self.isaac_common.get_robot_default_full_usd_path(gripper_model_name)
+        gripper_usd_path = self.isaac_common.get_entity_default_full_usd_path(gripper_model_name)
         if not gripper_usd_path:
             logging.error(f"[spawn_assembled_robot()][{gripper_model_name}] has no gripper usd")
             return None
@@ -597,14 +658,14 @@ class Isaac(object, metaclass=Singleton):
             articulation_controller.set_gains(*robot.get_custom_gains())
             articulation_controller.apply_action(actions)
 
-    def start_stacking(self, robot: OmniRobot):
-        stacking_task = robot.create_stacking_task(
+    def start_simple_stacking(self, robot: OmniRobot):
+        stacking_task = robot.create_simple_stacking_task(
             task_name=f"{robot.name}_stacking_task",
             target_position=np.array([0.5, 0.5, 0]) / get_stage_units()
         )
         self.add_robot_task(stacking_task)
 
-        # NOTE: This stacking controller cannot be created right in [robot.create_stacking_task()] for reasons:
+        # NOTE: This stacking controller cannot be created right in [robot.create_simple_stacking_task()] for reasons:
         # (1) Cubes will be created in set_up_scene(), which is invoked by world.reset() upon [self.add_robot_task()]
         # (2) StackingController invoke PickingController, which requires [robot.rmp_flow_controller], which is only
         # initialized upon [robot.initialize()] in [world.reset()]
@@ -616,7 +677,7 @@ class Isaac(object, metaclass=Singleton):
             robot_observation_name=robot.robot_unique_name
         )
 
-    def step_stacking(self, robot: OmniRobot):
+    def step_simple_stacking(self, robot: OmniRobot):
         if self.omni_world.is_playing():
             if self.omni_world.current_time_step_index == 0:
                 #NOTE: This invokes current tasks' set_up_scene()
@@ -645,6 +706,43 @@ class Isaac(object, metaclass=Singleton):
             #    for i in range(gripper_dofs_num):
             #        gripper_joint_target[i] += self.assembled_count
             #    self.EXAMPLE_GRIPPER.apply_action(ArticulationAction(gripper_joint_target))
+
+    def start_hanoi_tower(self, robot: OmniRobot):
+        hanoi_tower_task = robot.create_hanoi_tower_task(
+            task_name=f"{robot.name}_hanoi_tower_task"
+        )
+        self.add_robot_task(hanoi_tower_task)
+
+        # NOTE: This stacking controller cannot be created right in [robot.create_simple_stacking_task()] for reasons:
+        # (1) Cubes will be created in set_up_scene(), which is invoked by world.reset() upon [self.add_robot_task()]
+        # (2) StackingController invoke PickingController, which requires [robot.rmp_flow_controller], which is only
+        # initialized upon [robot.initialize()] in [world.reset()]
+        robot.task_controller = StackingController(
+            name=f"{robot.robot_unique_name}_stacking_controller",
+            gripper=robot.gripper_articulation.gripper if robot.gripper_articulation else robot.gripper,
+            robot_articulation=robot,
+            picking_order_cube_names=hanoi_tower_task.get_disk_names(),
+            robot_observation_name=robot.robot_unique_name
+        )
+
+    def step_hanoi_tower(self, robot: OmniRobot):
+        if self.omni_world.is_playing():
+            if self.omni_world.current_time_step_index == 0:
+                #NOTE: This invokes current tasks' set_up_scene()
+                self.omni_world.reset()
+                robot.task_controller.reset()
+            observations = self.omni_world.get_observations()
+
+            current_event = robot.pick_place_controller.get_current_event()
+            actions = robot.task_controller.forward(observations=observations,
+                                                    end_effector_offset=np.array([0.0, 0.0, 0.02]),
+                                                    end_effector_orientation=euler_angles_to_quat(
+                                                        np.array([0.0, np.pi/2.0, 0.0])))
+
+            if robot.gripper_articulation and (current_event == 3 or current_event == 7):
+                robot.gripper_articulation.apply_action(actions)
+            else:
+                robot.apply_action(actions)
 
     def start_curobo_mpc(self, robot: OmniRobot):
         robot.curobo_robot_controller = CuroboRobotController(robot=robot, world=self.omni_world,

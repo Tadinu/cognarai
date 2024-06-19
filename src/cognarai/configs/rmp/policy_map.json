@@ -29,6 +29,16 @@
 		"RMPflowCortex" : "./universal_robots/ur10/rmpflow_suction/config_cortex.json",
 		"RMPflowSuction" : "./universal_robots/ur10/rmpflow_suction/config.json"
 	},
+	"ur10_long_suction":{
+		"RMPflow" : "./universal_robots/ur10/rmpflow/config.json",
+		"RMPflowCortex" : "./universal_robots/ur10/rmpflow_suction/config_cortex.json",
+		"RMPflowSuction" : "./universal_robots/ur10/rmpflow_suction/config.json"
+	},
+	"ur10_short_suction":{
+		"RMPflow" : "./universal_robots/ur10/rmpflow/config.json",
+		"RMPflowCortex" : "./universal_robots/ur10/rmpflow_suction/config_cortex.json",
+		"RMPflowSuction" : "./universal_robots/ur10/rmpflow_suction/config.json"
+	},
 	"ur10e":{
 		"RMPflow" : "./universal_robots/ur10e/rmpflow/config.json",
 		"RMPflowCortex" : "./universal_robots/ur10e/rmpflow/config_cortex.json"
