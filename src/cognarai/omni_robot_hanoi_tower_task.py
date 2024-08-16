@@ -16,7 +16,7 @@ from omni.isaac.core.utils.stage import get_stage_units
 from omni.isaac.core.utils.string import find_unique_string_name
 from omni.isaac.core.tasks import BaseTask
 
-# Isaac-Interface
+# Cognarai
 if TYPE_CHECKING:
     from .omni_robot import OmniRobot
 

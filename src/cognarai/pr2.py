@@ -6,7 +6,7 @@ import numpy as np
 # Omniverse/Isaac
 from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
 
-# Isaac-Interface
+# Cognarai
 from .omni_robot import OmniRobot
 from .isaac_common import *
 

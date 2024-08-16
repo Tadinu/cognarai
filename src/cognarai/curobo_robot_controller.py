@@ -39,7 +39,7 @@ from curobo.wrap.reacher.motion_gen import (
 from curobo.wrap.reacher.mpc import MpcSolver, MpcSolverConfig
 from curobo.cuda_robot_model.cuda_robot_generator import CudaRobotGeneratorConfig
 
-# ISaac-Interface
+# Cognarai
 from .omni_robot import OmniRobot
 
 

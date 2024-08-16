@@ -25,7 +25,7 @@ from omni.isaac.manipulators.grippers.gripper import Gripper
 from omni.isaac.manipulators.grippers.surface_gripper import SurfaceGripper
 from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
 
-# Isaac-interface
+# Cognarai
 from .isaac_common import IsaacCommon
 from .path_planning_controller import PathRRTController
 from .pick_place_controller import PickPlaceController
@@ -80,6 +80,7 @@ class OmniRobot(Robot):
         self.robot_model_name: str = robot_model_name
         self.robot_unique_name: str = name
         self.robot_prim_path: str = prim_path
+        self.active_dof_num: int = 0
 
         # 1- Robot prim from [usd_path] if not existing
         if not is_prim_path_valid(prim_path):
@@ -187,6 +188,10 @@ class OmniRobot(Robot):
         """Auto-invoked by world.reset()"""
         logger.info(f"Initialize [{self.robot_model_name}]: Robot[{self.robot_unique_name}] - gripper[{self._gripper}]")
         super().initialize(physics_sim_view)
+
+        # Verify active dofs
+        assert self.active_dof_num <= self.num_dof, (f"Robot[{self.robot_unique_name}] has "
+                                                     f"active-dof-num: {self.active_dof_num} > full-dof-num: {self.num_dof}")
 
         # Init EE
         if self._end_effector:
