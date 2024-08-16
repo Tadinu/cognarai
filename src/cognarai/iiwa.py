@@ -6,7 +6,7 @@ import numpy as np
 # Omniverse
 from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
 
-# Isaac-Interface
+# Cognarai
 from .omni_robot import OmniRobot
 from .isaac_common import *
 

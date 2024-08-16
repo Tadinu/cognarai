@@ -7,10 +7,10 @@ import numpy as np
 from omni.isaac.core.utils.stage import get_stage_units
 from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
 
-# Isaac-Interface
+# Cognarai
 from .omni_robot import OmniRobot
 from .isaac_common import *
-
+from .panda_picking_task import PandaPickingTask
 
 class Panda(OmniRobot):
     """[summary]
@@ -69,6 +69,7 @@ class Panda(OmniRobot):
                                                     "franka", "rmpflow", "robot_descriptor.yaml")
         self.lula_description_path = os.path.join(self.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY,
                                                   "franka", "lula_franka_gen.urdf")
+        self.fab_picking_task = PandaPickingTask
 
     def post_reset(self) -> None:
         """[summary]"""
@@ -82,3 +83,8 @@ class Panda(OmniRobot):
 
     def get_custom_gains(self) -> Tuple[np.array, np.array]:
         return (1e15 * np.ones(9), 1e13 * np.ones(9))
+
+    def create_picking_task(self, task_name: str,
+                            offset: Optional[np.ndarray] = None, ) -> PandaPickingTask:
+        self.fab_picking_task = PandaPickingTask(robot=self, name=task_name, offset=offset)
+        return self.fab_picking_task

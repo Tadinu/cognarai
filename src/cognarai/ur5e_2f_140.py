@@ -3,7 +3,7 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
-# Isaac-Interface
+# Cognarai
 from .ur5 import UR5
 from .isaac_common import *
 

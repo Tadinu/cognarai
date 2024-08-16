@@ -7,7 +7,7 @@ from omni.isaac.core.utils.types import ArticulationAction
 from omni.isaac.manipulators.controllers import StackingController as ManipulatorStackingController
 from omni.isaac.manipulators.grippers.gripper import Gripper
 
-# Isaac-Interface
+# Cognarai
 from .pick_place_controller import PickPlaceController
 
 

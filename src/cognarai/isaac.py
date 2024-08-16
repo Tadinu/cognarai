@@ -66,9 +66,10 @@ from curobo.util_file import get_robot_configs_path, join_path, load_yaml
 from curobo.wrap.reacher.ik_solver import IKSolver as CuroboIKSolver, IKSolverConfig as CuroboIKSolverConfig
 from curobo.cuda_robot_model.cuda_robot_generator import CudaRobotGeneratorConfig
 
-# Isaac-Interface
+# Cognarai
 from .isaac_common import *
 from .omni_robot import OmniRobot
+from .panda import Panda
 from .curobo_robot_controller import CuroboBoxStackTask, CuroboRobotController
 from .stacking_controller import StackingController
 
@@ -873,6 +874,19 @@ class Isaac(object, metaclass=Singleton):
                 robot.get_articulation_controller().apply_action(art_action)
                 # for _ in range(2):
                 #    self.omni_world.step(render=False)
+
+    def start_panda_picking_task(self, panda: Panda):
+        panda_picking_task = panda.create_picking_task(
+            task_name=f"{panda.name}_picking_task"
+        )
+        self.add_robot_task(panda_picking_task)
+
+    def step_panda_picking(self, panda: Panda):
+        if self.omni_world.is_playing():
+            if self.omni_world.current_time_step_index == 0:
+                #NOTE: This invokes current tasks' set_up_scene()
+                self.omni_world.reset()
+            panda.fab_picking_task.step()
 
     def spawn_camera(self, prim_path: str, position: np.array, orientation: np.array,
                      add_motion_vector: bool = False):

@@ -3,7 +3,7 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
-# Isaac-Interface
+# Cognarai
 from .omni_robot import OmniRobot
 from .isaac_common import IsaacCommon
 
