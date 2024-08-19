@@ -49,8 +49,8 @@ import omni.physx.bindings._physx as PhysX
 #from omni.physx import get_physx_simulation_interface
 from omni.isaac.dynamic_control import _dynamic_control as dynamic_control_manager
 from omni.isaac.dynamic_control import utils as dynamic_control_utils
-from omni.isaac.occupancy_map import _occupancy_map as occupancy_map_manager
-from omni.isaac.occupancy_map.scripts.utils import compute_coordinates, generate_image, update_location
+from omni.isaac.occupancy_map.bindings import _occupancy_map as occupancy_map_manager
+from omni.isaac.occupancy_map.utils import compute_coordinates, generate_image, update_location
 from omni.importer.urdf import _urdf as omni_urdf
 from omni.importer.mjcf import _mjcf as omni_mjcf
 from omni.isaac.core.prims.xform_prim import XFormPrim
@@ -58,10 +58,11 @@ from omni.isaac.core.utils.prims import is_prim_path_valid
 from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
 
 # CuRobo
-from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModel, CudaRobotModelState
+from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModel, CudaRobotModelState, CudaRobotModelConfig
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.types.robot import RobotConfig as CuroboRobotConfig
+from curobo.types.file_path import ContentPath as CuroboContentPath
 from curobo.util_file import get_robot_configs_path, join_path, load_yaml
 from curobo.wrap.reacher.ik_solver import IKSolver as CuroboIKSolver, IKSolverConfig as CuroboIKSolverConfig
 from curobo.cuda_robot_model.cuda_robot_generator import CudaRobotGeneratorConfig
@@ -170,7 +171,6 @@ class Isaac(object, metaclass=Singleton):
         self.entity_configs: Dict[str, CuroboRobotConfig] = {}
         self.ik_solvers: Dict[str, CuroboIKSolver] = {}
         self.kinematics_models: Dict[str, CudaRobotModel] = {}
-        self.init_curobo_configs()
 
         self.physx_interface: PhysX = None
         self.dynamic_control_interface = None
@@ -182,10 +182,6 @@ class Isaac(object, metaclass=Singleton):
     def set_omni_world(self, world: omni.isaac.core.World):
         self.omni_world = world
         self.omni_stage = world.stage
-
-    def init_curobo_configs(self):
-        CudaRobotGeneratorConfig.external_asset_path = self.isaac_common.CUROBO_EXTERNAL_ASSETS_DIRECTORY
-        CudaRobotGeneratorConfig.external_robot_configs_path = self.isaac_common.CUROBO_EXTERNAL_CONFIGS_DIRECTORY
 
     def init_tools(self):
         # PhysX
@@ -215,18 +211,24 @@ class Isaac(object, metaclass=Singleton):
         :param urdf_file_path: path to the urdf file of the entity model
         :return: A tuple of entity config and its ik solver
         """
-        print('LOAD ENTITY CONFIG:', urdf_file_path, f"exists: {Path(urdf_file_path).exists()}")
+        urdf_exists = Path(urdf_file_path).exists()
+        print('LOAD ENTITY CONFIG:', urdf_file_path, f"exists: {urdf_exists}")
+        if not urdf_exists:
+            logging.error(f"Entity model path does not exist: {urdf_file_path}")
+            return
         entity_model_name = Path(urdf_file_path).stem
         if entity_model_name not in self.config_paths:
             logging.error(f"No Curobo yml config file registered yet for entity model: {entity_model_name}")
             return
-
         if entity_model_name in self.entity_configs:
+            # Entity configs: already loaded
             return
 
+        # [entity_yaml_path] -> [entity_yaml_config] -> [entity_config]
         entity_yaml_path = self.config_paths[entity_model_name]
         entity_yaml_config = load_yaml(entity_yaml_path)
         entity_kinematics = entity_yaml_config["robot_cfg"]["kinematics"]
+        entity_kinematics["urdf_path"] = urdf_file_path # Overwrite one defined in yaml
         base_link = entity_kinematics["base_link"]
         if not base_link:
             logging.error(f"{entity_yaml_path}: No base_link configured")
@@ -241,8 +243,17 @@ class Isaac(object, metaclass=Singleton):
                 return
         else:
             entity_config = CuroboRobotConfig.from_basic(urdf_file_path, base_link, ee_links, self.tensor_device)
+
+        # [entity_config]'s [kinematics]
+        entity_content_path = CuroboContentPath(robot_config_root_path=self.isaac_common.CUROBO_EXTERNAL_CONFIGS_DIRECTORY,
+                                                robot_asset_root_path=self.isaac_common.CUROBO_EXTERNAL_ASSETS_DIRECTORY,
+                                                world_config_root_path=self.isaac_common.CUROBO_EXTERNAL_CONFIGS_DIRECTORY,
+                                                world_asset_root_path=self.isaac_common.CUROBO_EXTERNAL_ASSETS_DIRECTORY,
+                                                robot_urdf_absolute_path=urdf_file_path, robot_config_absolute_path=entity_yaml_path)
+        entity_config.kinematics = CudaRobotModelConfig.from_content_path(entity_content_path, ee_links, self.tensor_device)
         self.entity_configs[entity_model_name] = entity_config
 
+        # FK & IK_SOLVERS
         if self.isaac_common.is_supported_robot_model(entity_model_name):
             for ee_link in ee_links:
                 # Create entity's kinematics model
@@ -322,34 +333,50 @@ class Isaac(object, metaclass=Singleton):
         return kinematics_model.get_state(q, ee_link_name)
 
     def spawn_object(self, world: omni.isaac.core.World,
-                     object_model_name: str,
+                     object_model_path: str,
                      object_prim_path: str,
                      position: np.array = np.array([0, 0, 0]),
                      orientation: np.array = np.array(euler_angles_to_quat([0, 0, 0], degrees=True))) -> Optional[RigidPrim]:
-        if not self.isaac_common.has_usd(object_model_name):
-            logging.error(f"Object [{object_model_name}] does not have USD model configured")
+        # Only create object if [object_prim_path] does not exist yet
+        # -> Also means [object_prim_path] must be unique!
+        if is_prim_path_valid(object_prim_path):
             return None
 
-        if not is_prim_path_valid(object_prim_path):
-            object_usd_prim = create_prim(prim_path=object_prim_path, prim_type="Xform", position=position)
-            add_reference_to_stage(usd_path=self.isaac_common.get_entity_default_full_usd_path(object_model_name),
-                                   prim_path=object_prim_path)
-            # Gravity: disabled
-            rigidBodyAPI = PhysxSchema.PhysxRigidBodyAPI.Apply(object_usd_prim)
-            rigidBodyAPI.CreateDisableGravityAttr(True)
+        # Accept either full-path model name or relative one, of which the full path must have been registered
+        object_model_name = Path(object_model_path).stem
+        if os.path.isabs(object_model_path):
+            if os.path.exists(object_model_path):
+                object_usd_path = object_model_path
+            else:
+                logging.error(f"[{object_model_path}] does not exist!")
+                return None
+        else:
+            if self.isaac_common.has_usd(object_model_name):
+                object_usd_path = self.isaac_common.get_entity_default_full_usd_path(object_model_name)
+            else:
+                logging.error(f"Object [{object_model_name}] does not have USD model configured")
+                return None
 
-            # Collision: enabled
-            collisionAPI = UsdPhysics.CollisionAPI.Apply(object_usd_prim)
-            collisionAPI.CreateCollisionEnabledAttr().Set(True)
+        # Create object prim
+        object_usd_prim = create_prim(prim_path=object_prim_path, prim_type="Xform", position=position)
+        add_reference_to_stage(usd_path=object_usd_path, prim_path=object_prim_path)
 
-            # Mass: set mass and inertia
-            massAPI = UsdPhysics.MassAPI.Apply(object_usd_prim)
-            massAPI.CreateMassAttr().Set(0.01)
-            #massAPI.CreateDiagonalInertiaAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
-            #massAPI.CreateCenterOfMassAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+        # Gravity: disabled
+        rigidBodyAPI = PhysxSchema.PhysxRigidBodyAPI.Apply(object_usd_prim)
+        rigidBodyAPI.CreateDisableGravityAttr(True)
 
-        # Make objec rigid prim to set its world pose
-        object = RigidPrim(name=f"{Path(object_prim_path).name}_0", prim_path=object_prim_path, mass=0.1, position=position,
+        # Collision: enabled
+        collisionAPI = UsdPhysics.CollisionAPI.Apply(object_usd_prim)
+        collisionAPI.CreateCollisionEnabledAttr().Set(True)
+
+        # Mass: set mass and inertia
+        massAPI = UsdPhysics.MassAPI.Apply(object_usd_prim)
+        massAPI.CreateMassAttr().Set(0.01)
+        #massAPI.CreateDiagonalInertiaAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+        #massAPI.CreateCenterOfMassAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+
+        # Make object rigid prim to set its world pose
+        object = RigidPrim(name=f"{Path(object_prim_path).name}", prim_path=object_prim_path, mass=0.1, position=position,
                            orientation=orientation)
         object.set_world_pose(position=position, orientation=orientation)
 

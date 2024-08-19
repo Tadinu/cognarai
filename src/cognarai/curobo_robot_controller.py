@@ -96,8 +96,6 @@ class CuroboRobotController(BaseController):
         self.world_file = "collision_table.yml"
         self.tensor_device = TensorDeviceType()
         from .isaac import Isaac
-        CudaRobotGeneratorConfig.external_asset_path = robot.isaac_common.CUROBO_EXTERNAL_ASSETS_DIRECTORY
-        CudaRobotGeneratorConfig.external_robot_configs_path = robot.isaac_common.CUROBO_EXTERNAL_CONFIGS_DIRECTORY
         if robot.robot_model_name not in Isaac().entity_configs:
             assert False, f"[{robot.robot_model_name}] model yaml configs have not been loaded yet!"
         self.robot_cfg = Isaac().entity_configs[robot.robot_model_name]
