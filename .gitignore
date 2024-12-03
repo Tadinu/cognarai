@@ -4,3 +4,5 @@ src/cognarai.egg-info/
 src/cognarai/__pycache__/
 *.zip
 *bku.yaml
+ACTIVATE_ISAAC_ENV.sh
+ACTIVATE_ISAAC_LAB_ENV.sh
