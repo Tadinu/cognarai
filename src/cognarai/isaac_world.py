@@ -11,6 +11,12 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
+# IsaacSim's third party path activation
+try:
+    import isaacsim
+except ImportError:
+    pass
+
 # Omniverse/Isaac
 from omni.isaac.kit import SimulationApp
 # This is required before importing any other omni pkgs, including carb

@@ -49,8 +49,8 @@ import omni.physx.bindings._physx as PhysX
 #from omni.physx import get_physx_simulation_interface
 from omni.isaac.dynamic_control import _dynamic_control as dynamic_control_manager
 from omni.isaac.dynamic_control import utils as dynamic_control_utils
-from omni.isaac.occupancy_map import _occupancy_map as occupancy_map_manager
-from omni.isaac.occupancy_map.scripts.utils import compute_coordinates, generate_image, update_location
+from omni.isaac.occupancy_map.bindings import _occupancy_map as occupancy_map_manager
+from omni.isaac.occupancy_map.utils import compute_coordinates, generate_image, update_location
 from omni.importer.urdf import _urdf as omni_urdf
 from omni.importer.mjcf import _mjcf as omni_mjcf
 from omni.isaac.core.prims.xform_prim import XFormPrim
