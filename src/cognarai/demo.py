@@ -23,8 +23,8 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 
 # Cognarai
+# !NOTE: All related to Isaac must be imported after [IsaacWorld]
 from cognarai.isaac_world import IsaacWorld
-# All must be imported after [IsaacWorld]
 from cognarai.isaac import Isaac
 from cognarai.isaac_common import *
 
@@ -52,6 +52,8 @@ def main():
     if is_ur10_suction_robot:
         isaac.spawn_object(world.omni_world, UR10_MOUNT_MODEL, f"/World/ur10_mount", position=robot_position)
 
+    while world.isaac_sim_app.is_running():
+        pass
 if __name__ == "__main__":
     main()
     #world.exit()

@@ -9,8 +9,8 @@ from mpscenes.obstacles.box_obstacle import BoxObstacle
 from mpscenes.obstacles.sphere_obstacle import SphereObstacle
 
 # Fabrics
-from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
-from fabrics.helpers.functions import get_rotation_matrix
+from cognarai.fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
+from cognarai.fabrics.helpers.functions import get_rotation_matrix
 
 # Omniverse
 import carb, omni.appwindow
