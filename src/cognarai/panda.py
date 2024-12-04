@@ -69,7 +69,7 @@ class Panda(OmniRobot):
                                                     "franka", "rmpflow", "robot_descriptor.yaml")
         self.lula_description_path = os.path.join(self.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY,
                                                   "franka", "lula_franka_gen.urdf")
-        self.fab_picking_task = PandaPickingTask
+        self.fab_picking_task = None
 
     def post_reset(self) -> None:
         """[summary]"""
