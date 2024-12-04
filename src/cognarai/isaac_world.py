@@ -107,7 +107,7 @@ class IsaacWorld(object):
                                                    add_motion_vector=False)
 
         # Extra Omni extensions
-        self._init_extra_omniverse_extensions()
+        #self._init_extra_omniverse_extensions()
 
     def exec_loop(self):
         if self.run_experiment is None:

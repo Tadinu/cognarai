@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "cognarai"
 dynamic = ["version"]
 description = """\
-  Cognitive robotic learning framework\
+  Cognitive robotic learning framework in Isaac Sim\
 """
 authors = [
   {name = "Duc Than"},

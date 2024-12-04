@@ -23,8 +23,8 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 
 # Cognarai
+# !NOTE: All related to Isaac must be imported after [IsaacWorld]
 from cognarai.isaac_world import IsaacWorld
-# All must be imported after [IsaacWorld]
 from cognarai.isaac import Isaac
 from cognarai.isaac_common import *
 
@@ -57,6 +57,8 @@ def main():
     # WORLD EXEC
     world.exec_loop()
 
+    while world.isaac_sim_app.is_running():
+        pass
 if __name__ == "__main__":
     main()
     #world.exit()
