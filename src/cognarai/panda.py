@@ -1,4 +1,6 @@
 import os
+
+import carb
 from typing_extensions import List, Optional, Sequence
 
 import numpy as np
@@ -6,6 +8,7 @@ import numpy as np
 # Omniverse/Isaac
 from omni.isaac.core.utils.stage import get_stage_units
 from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
+from omni.isaac.franka import KinematicsSolver as FrankaKinematicsSolver
 
 # Cognarai
 from .omni_robot import OmniRobot
@@ -88,3 +91,16 @@ class Panda(OmniRobot):
                             offset: Optional[np.ndarray] = None, ) -> PandaPickingTask:
         self.fab_picking_task = PandaPickingTask(robot=self, name=task_name, offset=offset)
         return self.fab_picking_task
+
+    def follow_target(self, target_name: str):
+        if not super().follow_target(target_name):
+            return
+        observations = self.isaac.omni_world.get_observations()[target_name]
+        actions, succ = self.ik_solver.compute_inverse_kinematics(
+            target_position=observations["position"],
+            target_orientation=observations["orientation"],
+        )
+        if succ:
+            self.apply_action(actions)
+        else:
+            carb.log_warn(f"[{self.robot_unique_name}]: IK did not converge to a solution. No action is being taken.")

@@ -5,7 +5,7 @@ import pathlib
 import logging
 
 from pathlib import Path
-from typing_extensions import Any, List, Dict, Type
+from typing_extensions import Any, List, Dict, Type, Callable
 import os
 import logging
 
@@ -68,11 +68,13 @@ from curobo.wrap.reacher.ik_solver import IKSolver as CuroboIKSolver, IKSolverCo
 from curobo.cuda_robot_model.cuda_robot_generator import CudaRobotGeneratorConfig
 
 # Cognarai
-from .isaac_common import *
-from .omni_robot import OmniRobot
-from .panda import Panda
-from .curobo_robot_controller import CuroboBoxStackTask, CuroboRobotController
-from .stacking_controller import StackingController
+from cognarai.isaac_common import *
+from cognarai.omni_robot import OmniRobot
+from cognarai.omni_robot_task import (OmniTargetFollowingTask, OmniTargetFollowingType, OmniPathPlanningTask,
+                                      OmniSimpleStackingTask)
+from cognarai.panda import Panda
+from cognarai.curobo_robot_controller import CuroboBoxStackTask, CuroboRobotController
+from cognarai.stacking_controller import StackingController
 
 torch.backends.cudnn.benchmark = True
 
@@ -178,6 +180,9 @@ class Isaac(object, metaclass=Singleton):
         self.occupancy_map_generator = None
         self.robot_assembler: RobotAssembler = None
         self.init_tools()
+
+        self.robot_tasks: Dict[IsaacTaskId, Tuple[Callable, Callable, Callable]]
+        self.init_robot_tasks()
 
     def set_omni_world(self, world: omni.isaac.core.World):
         self.omni_world = world
@@ -640,7 +645,25 @@ class Isaac(object, metaclass=Singleton):
         self.omni_world.scene.add(robot.gripper_articulation)
         return robot
 
-    def add_robot_task(self, task: BaseTask):
+    def init_robot_tasks(self):
+        self.robot_tasks = {
+            IsaacTaskId.TARGET_FOLLOWING: (lambda robot: f"{robot.name}_target_follow_task",
+                                           self.start_target_following, self.step_target_following),
+            IsaacTaskId.PATH_PLANNING: (lambda robot: f"{robot.name}_path_plan_task",
+                                        self.start_path_planning, self.step_path_planning),
+            IsaacTaskId.PICK_PLACE_PANDA: (lambda robot: f"{robot.name}_pick_place_task",
+                                           self.start_panda_picking_task, self.step_panda_picking),
+            IsaacTaskId.PICK_PLACE_CUROBO: (lambda robot: f"{robot.name}_pick_place_curobo_task",
+                                            self.start_curobo_pick_place, self.step_curobo_pick_place),
+            IsaacTaskId.SIMPLE_STACKING: (lambda robot: f"{robot.name}_simple_stacking_task",
+                                          self.start_simple_stacking, self.step_simple_stacking),
+            IsaacTaskId.HANOI_TOWER: (lambda robot: f"{robot.name}_hanoi_tower_task",
+                                      self.start_hanoi_tower, self.step_hanoi_tower),
+            IsaacTaskId.MPC_CUROBO: (lambda robot: f"{robot.name}_mpc_curobo_task",
+                                     self.start_curobo_mpc, self.step_curobo_mpc)
+        }
+
+    def add_robot_task(self, task: BaseTask) -> None:
         if self.omni_world:
             self.omni_world.add_task(task)
             # Reset world, and physics_sim_view, articulation_view, etc.
@@ -648,27 +671,59 @@ class Isaac(object, metaclass=Singleton):
         else:
             assert False, "Omni Isaac world must be present for robot task!"
 
-    def start_rmp_following(self, robot):
-        rmp_following_task = robot.create_target_following_task(
-            task_name=f"{robot.name}_target_follow_task"
-        )
-        self.add_robot_task(rmp_following_task)
+    def get_robot_task_name(self, task_id: IsaacTaskId, robot: OmniRobot) -> str:
+        return self.robot_tasks[task_id][0](robot)
 
-    def step_rmp_following(self, robot):
+    def get_robot_task(self, task_id: IsaacTaskId, robot: OmniRobot) -> BaseTask:
+        return self.omni_world.get_task(self.get_robot_task_name(task_id, robot))
+
+    def start_robot_task(self, task_id: IsaacTaskId, robot: OmniRobot, target_name: Optional[str] = None):
+        if task_id in self.robot_tasks:
+            start_task = self.robot_tasks[task_id][1]
+            if start_task:
+                if task_id == IsaacTaskId.TARGET_FOLLOWING or task_id == IsaacTaskId.PATH_PLANNING:
+                    start_task(robot, target_name)
+                else:
+                    start_task(robot)
+
+    def step_robot_task(self, task_id: IsaacTaskId, robot: OmniRobot, target_name: Optional[str] = None):
+        robot.update()
+        if task_id in self.robot_tasks:
+            step_task = self.robot_tasks[task_id][2]
+            if step_task:
+                step_task(robot)
+
+    def start_target_following(self, robot: OmniRobot, target_name: Optional[str] = None):
+        target_follow_task = robot.create_target_following_task(
+            task_name=self.get_robot_task_name(IsaacTaskId.TARGET_FOLLOWING, robot),
+            following_type=OmniTargetFollowingType.RMP,
+            target_name=target_name
+        )
+        self.add_robot_task(target_follow_task)
+
+    def step_target_following(self, robot):
         if self.omni_world.is_playing():
+            target_follow_task: OmniTargetFollowingTask = self.get_robot_task(IsaacTaskId.TARGET_FOLLOWING, robot)
+            is_using_rmp = target_follow_task.is_using_rmp()
             if self.omni_world.current_time_step_index == 0:
                 self.omni_world.reset()
-                robot.rmp_flow_controller.reset()
-            observations = self.omni_world.get_observations()[robot.rmp_target_name]
-            actions = robot.rmp_flow_controller.forward(
-                target_end_effector_position=observations["position"],
-                target_end_effector_orientation=observations["orientation"],
-            )
-            robot.apply_action(actions)
+                if is_using_rmp:
+                    robot.rmp_flow_controller.reset()
 
-    def start_path_planning(self, robot):
+            if is_using_rmp:
+                observations = self.omni_world.get_observations()[target_follow_task.target_name]
+                actions = robot.rmp_flow_controller.forward(
+                    target_end_effector_position=observations["position"],
+                    target_end_effector_orientation=observations["orientation"],
+                )
+                robot.apply_action(actions)
+            else:
+                robot.follow_target(target_follow_task.target_name)
+
+    def start_path_planning(self, robot, target_name: Optional[str] = None):
         path_planning_task = robot.create_path_planning_task(
-            task_name=f"{robot.name}_path_planning_task"
+            task_name=self.get_robot_task_name(IsaacTaskId.PATH_PLANNING, robot),
+            target_name=target_name
         )
         self.add_robot_task(path_planning_task)
 
@@ -677,7 +732,8 @@ class Isaac(object, metaclass=Singleton):
             if self.omni_world.current_time_step_index == 0:
                 self.omni_world.reset()
                 robot.path_rrt_controller.reset()
-            observations = self.omni_world.get_observations()[robot.path_plan_target_name]
+            path_plan_task: OmniPathPlanningTask = self.get_robot_task(IsaacTaskId.PATH_PLANNING, robot)
+            observations = self.omni_world.get_observations()[path_plan_task.target_name]
             actions = robot.path_rrt_controller.forward(
                 target_end_effector_position=observations["position"],
                 target_end_effector_orientation=observations["orientation"],
@@ -688,7 +744,7 @@ class Isaac(object, metaclass=Singleton):
 
     def start_simple_stacking(self, robot: OmniRobot):
         stacking_task = robot.create_simple_stacking_task(
-            task_name=f"{robot.name}_stacking_task",
+            task_name=self.get_robot_task_name(IsaacTaskId.SIMPLE_STACKING, robot),
             target_position=np.array([0.5, 0.5, 0]) / get_stage_units()
         )
         self.add_robot_task(stacking_task)
@@ -737,7 +793,7 @@ class Isaac(object, metaclass=Singleton):
 
     def start_hanoi_tower(self, robot: OmniRobot):
         hanoi_tower_task = robot.create_hanoi_tower_task(
-            task_name=f"{robot.name}_hanoi_tower_task"
+            task_name=self.get_robot_task_name(IsaacTaskId.HANOI_TOWER, robot)
         )
         self.add_robot_task(hanoi_tower_task)
 
@@ -788,7 +844,8 @@ class Isaac(object, metaclass=Singleton):
         self.curobo_ignored_substring = ["Franka", "TargetCube", "material", "Plane"]
 
         # Create pick-place task
-        robot.curobo_pick_place_task = CuroboBoxStackTask(robot=robot)
+        robot.curobo_pick_place_task = CuroboBoxStackTask(robot=robot,
+                                                          name=self.get_robot_task_name(IsaacTaskId.PICK_PLACE_CUROBO, robot))
         robot.curobo_pick_place_task.set_up_scene(self.omni_world.scene)
         # Reset articulation_view here-in
         self.add_robot_task(robot.curobo_pick_place_task)
@@ -904,7 +961,7 @@ class Isaac(object, metaclass=Singleton):
 
     def start_panda_picking_task(self, panda: Panda):
         panda_picking_task = panda.create_picking_task(
-            task_name=f"{panda.name}_picking_task"
+            task_name=self.get_robot_task_name(IsaacTaskId.PICK_PLACE_PANDA, robot)
         )
         self.add_robot_task(panda_picking_task)
 

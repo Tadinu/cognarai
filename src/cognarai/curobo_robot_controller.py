@@ -80,13 +80,13 @@ class CuroboRobotController(BaseController):
         constrain_grasp_approach: bool = False,
     ) -> None:
         if not name:
-            name = f"{robot.robot_unique_name}_curobo_robot_controller"
+            name = f"{robot.robot_unique_name}_curobo_controller"
         BaseController.__init__(self, name=name)
         self._save_log = False
         self.robot = robot
         self.world = world
         self.task = task
-        self._step_idx = 0
+        self._step = 0
         self.constrain_grasp_approach = constrain_grasp_approach
         n_obstacle_cuboids = 20
         n_obstacle_mesh = 2
@@ -123,7 +123,6 @@ class CuroboRobotController(BaseController):
         self.usd_help.load_stage(self.world.stage)
         self.cmd_plan = None
         self.cmd_idx = 0
-        self._step_idx = 0
         self.idx_list = None
 
     def init_motion_gen(self, n_obstacle_cuboids, n_obstacle_mesh):
@@ -284,7 +283,7 @@ class CuroboRobotController(BaseController):
 
         if self.cmd_plan is None:
             self.cmd_idx = 0
-            self._step_idx = 0
+            self._step = 0
             # Set EE goals
             ee_translation_goal = self.task.target_position
             ee_orientation_goal = np.array([0, 0, -1, 0])
@@ -298,7 +297,7 @@ class CuroboRobotController(BaseController):
             else:
                 carb.log_warn("Plan did not converge to a solution.")
                 return None
-        if self._step_idx % 3 == 0:
+        if self._step % 3 == 0:
             cmd_state = self.cmd_plan[self.cmd_idx]
             self.cmd_idx += 1
 
@@ -313,7 +312,7 @@ class CuroboRobotController(BaseController):
                 self.cmd_plan = None
         else:
             art_action = None
-        self._step_idx += 1
+        self._step += 1
         return art_action
 
     def reached_target(self, observations: dict) -> bool:
@@ -369,9 +368,8 @@ class CuroboRobotController(BaseController):
         if not omni_world.is_playing():
             return
 
-        self._step_idx = Isaac().omni_world.current_time_step_index
-        if self._step_idx <= 2:
-            Isaac().omni_world.reset()
+        if omni_world.current_time_step_index <= 2:
+            omni_world.reset()
             idx_list = [self.robot.get_dof_index(x) for x in self.cmd_js_names]
             self.robot.set_joint_positions(self.robot_cfg.kinematics.cspace.retract_config.cpu().numpy(), idx_list)
 
@@ -379,8 +377,8 @@ class CuroboRobotController(BaseController):
                 values=np.array([5000 for i in range(len(idx_list))]), joint_indices=idx_list
             )
 
-        self._step_idx += 1
-        if self._step_idx % 1000 == 0:
+        self._step += 1
+        if self._step % 1000 == 0:
             print("Updating world")
             obstacles = self.usd_help.get_obstacles_from_stage(
                 # only_paths=[obstacles_path],
@@ -460,7 +458,7 @@ class CuroboRobotController(BaseController):
             joint_indices=idx_list,
         )
         # positions_goal = articulation_action.joint_positions
-        if self._step_idx % 1000 == 0:
+        if self._step % 1000 == 0:
             print(mpc_result.metrics.feasible.item(), mpc_result.metrics.pose_error.item())
 
         if succ:

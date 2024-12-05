@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing_extensions import List, Optional, Tuple, TYPE_CHECKING
 from collections import OrderedDict
+from enum import Enum
 
 # Omniverse
 import carb
@@ -21,9 +22,13 @@ if TYPE_CHECKING:
     from .omni_robot import OmniRobot
 
 
-class OmniTargetFollowingTask(FollowTarget):
+class OmniTargetFollowingType(Enum):
+    IK = 1
+    RMP = 2
 
+class OmniTargetFollowingTask(FollowTarget):
     def __init__(self, name: str, robot: OmniRobot,
+                 following_type: OmniTargetFollowingType = OmniTargetFollowingType.RMP,
                  target_prim_path: Optional[str] = None,
                  target_name: Optional[str] = None,
                  target_position: Optional[np.ndarray] = None,
@@ -41,6 +46,7 @@ class OmniTargetFollowingTask(FollowTarget):
             offset=offset,
         )
         self._robot = robot
+        self._following_type = following_type
 
     @property
     def robot(self) -> OmniRobot:
@@ -48,6 +54,17 @@ class OmniTargetFollowingTask(FollowTarget):
 
     def set_robot(self) -> OmniRobot:
         return self._robot
+
+    @property
+    def following_type(self) -> OmniTargetFollowingType:
+        return self._following_type
+
+    def is_using_rmp(self):
+        return self._following_type is OmniTargetFollowingType.RMP
+
+    @property
+    def target_name(self) -> str:
+        return self._target_name
 
     def set_up_scene(self, scene: Scene) -> None:
         """
@@ -74,7 +91,6 @@ class OmniTargetFollowingTask(FollowTarget):
             target_name=self._target_name,
         )
 
-        self.robot.rmp_target_name = self.get_params()["target_name"]["value"]
         # NOTE: Don't add self.robot to scene here (like in super().set_up_scene()) since it may have been added outside earlier
         self._task_objects[self._robot.name] = self.robot
         self._move_task_objects_to_their_frame()
@@ -218,7 +234,6 @@ class OmniPathPlanningTask(BaseTask):
         )
         # NOTE: Don't add self.robot to scene here since it may have been added outside earlier
         self._robot = self.set_robot()
-        self._robot.path_plan_target_name = self.get_params()["target_name"]["value"]
         self._task_objects[self._robot.name] = self._robot
         self._move_task_objects_to_their_frame()
 
