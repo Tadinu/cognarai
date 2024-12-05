@@ -1,10 +1,12 @@
 import os
 from typing import Optional, Sequence, Union
 
+from pathlib import Path
 import numpy as np
 
 # Cognarai
 from .omni_robot import OmniRobot
+from omni.isaac.universal_robots import KinematicsSolver as URKinematicSolver
 from .isaac_common import *
 
 
@@ -63,7 +65,7 @@ class UR5(OmniRobot):
                                                     "universal_robots", "ur5", "rmpflow", "ur5_robot_description.yaml")
         self.lula_description_path = os.path.join(self.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY,
                                                   "universal_robots", "ur5", "ur5.urdf")
-
+        self.ik_solver = URKinematicSolver(self, Path(end_effector_prim_name).stem, attach_gripper=True)
 
     def initialize(self, physics_sim_view=None) -> None:
         """[summary]"""
@@ -71,4 +73,17 @@ class UR5(OmniRobot):
         #self.set_joints_default_state(
         #    positions=np.array([-np.pi / 2, -np.pi / 2, -np.pi / 2, -np.pi / 2, np.pi / 2, 0])
         #)
+
+    def follow_target(self, target_name: str):
+        if not super().follow_target(target_name):
+            return
+        observations = self.isaac.omni_world.get_observations()[target_name]
+        actions, succ = self.ik_solver.compute_inverse_kinematics(
+            target_position=observations["position"],
+            target_orientation=observations["orientation"],
+        )
+        if succ:
+            self.apply_action(actions)
+        else:
+            carb.log_warn(f"[{self.robot_unique_name}]: IK did not converge to a solution. No action is being taken.")
 

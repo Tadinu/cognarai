@@ -1,19 +1,18 @@
 from __future__ import annotations
 import logging
-
-from lula import Obstacle
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-import pathlib
-from typing_extensions import List, Optional, Sequence, Union, Tuple
+from pathlib import Path
+from typing_extensions import List, Optional, Sequence, Union, Tuple, TYPE_CHECKING
 
 # Omniverse
 import numpy as np
 from omni.isaac.core.prims.xform_prim import XFormPrim
 from omni.isaac.core.prims.rigid_prim import RigidPrim
-from omni.isaac.core.objects import VisualCapsule
+if TYPE_CHECKING:
+    import omni.isaac.core.objects
+from omni.isaac.core.objects import DynamicCapsule
 from omni.isaac.core.robots.robot import Robot
 from omni.isaac.core.articulations import Articulation, ArticulationGripper
 from omni.isaac.core.utils.prims import get_prim_at_path, is_prim_path_valid
@@ -24,15 +23,17 @@ from omni.isaac.core.controllers.base_controller import BaseController
 from omni.isaac.manipulators.grippers.gripper import Gripper
 from omni.isaac.manipulators.grippers.surface_gripper import SurfaceGripper
 from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
+from omni.isaac.motion_generation.articulation_kinematics_solver import ArticulationKinematicsSolver
 
 # Cognarai
-from .isaac_common import IsaacCommon
-from .path_planning_controller import PathRRTController
-from .pick_place_controller import PickPlaceController
-from .stacking_controller import StackingController
-from .rmpflow_controller import RMPFlowController
-from .omni_robot_task import OmniSimpleStackingTask, OmniTargetFollowingTask, OmniPathPlanningTask
-from .omni_robot_hanoi_tower_task import OmniHanoiTowerTask
+from cognarai.isaac_common import IsaacCommon
+from cognarai.path_planning_controller import PathRRTController
+from cognarai.pick_place_controller import PickPlaceController
+from cognarai.stacking_controller import StackingController
+from cognarai.rmpflow_controller import RMPFlowController
+from cognarai.omni_robot_task import (OmniSimpleStackingTask, OmniTargetFollowingTask, OmniTargetFollowingType,
+                                      OmniPathPlanningTask)
+from cognarai.omni_robot_hanoi_tower_task import OmniHanoiTowerTask
 
 
 class OmniRobot(Robot):
@@ -81,6 +82,8 @@ class OmniRobot(Robot):
         self.robot_unique_name: str = name
         self.robot_prim_path: str = prim_path
         self.active_dof_num: int = 0
+        self.ik_solver: Optional[ArticulationKinematicsSolver] = None
+        self.physics_sim_view_inited: bool = False
 
         # 1- Robot prim from [usd_path] if not existing
         if not is_prim_path_valid(prim_path):
@@ -101,11 +104,16 @@ class OmniRobot(Robot):
         self.cspace_description_path: str = ""
         self.assembled_body: Optional[AssembledRobot] = assembled_body
 
-        # 2- EE
+        # 2.1- EE
         self.end_effector_prim_path = end_effector_prim_name if end_effector_prim_name and is_prim_path_valid(end_effector_prim_name) \
             else None
         self._end_effector: RigidPrim = RigidPrim(prim_path=self.end_effector_prim_path,
                                                   name=f"{self.name}_end_effector") if self.end_effector_prim_path else None
+
+        # 2.2- IK
+        from cognarai.omni_kinematics_solver import OmniKinematicsSolver
+        self.ik_solver = OmniKinematicsSolver(self, Path(self.end_effector_prim_path).stem) \
+                            if self.end_effector_prim_path else None
 
         # 3- Gripper
         self.gripper_articulation_root_path: Optional[str] = gripper_articulation_root_path
@@ -171,14 +179,12 @@ class OmniRobot(Robot):
                                               add_motion_vector=False) if self.end_effector_prim_path else None
 
         # 5- RMP
-        self.rmp_target_name: str = ""
         self.rmp_policy_name: str = rmp_policy_name
         self.rmp_policy_with_gripper_name: str = rmp_policy_with_gripper_name
         self.rmp_flow_controller: Optional[RMPFlowController] = None
 
         # 6- Path planning
-        self.path_plan_target_name: str = ""
-        self.path_rrt_controller: Optional[BaseController] = None
+        self.path_rrt_controller: Optional[PathRRTController] = None
 
         # 7- Controllers
         self.task_controller: Optional[BaseController] = None
@@ -188,6 +194,7 @@ class OmniRobot(Robot):
         """Auto-invoked by world.reset()"""
         logger.info(f"Initialize [{self.robot_model_name}]: Robot[{self.robot_unique_name}] - gripper[{self._gripper}]")
         super().initialize(physics_sim_view)
+        self.physics_sim_view_inited = True
 
         # Verify active dofs
         assert self.active_dof_num <= self.num_dof, (f"Robot[{self.robot_unique_name}] has "
@@ -220,16 +227,18 @@ class OmniRobot(Robot):
                 self._gripper.initialize(self.gripper_articulation_root_path,
                                          self.get_articulation_controller())
 
-        # Create default RMP-flow controller
+        # Create default RMP-flow & Path-RRT controllers
         if self.isaac_common.is_supported_articulation_model(self.robot_model_name):
             self.rmp_flow_controller = RMPFlowController(name=f"{self.name}_rmp_flow_controller",
                                                          robot_articulation=self,
                                                          attach_extra_gripper=True if self._gripper else False)
-            for _, objects in self.isaac.objects.items():
-                for object in objects:
-                    self.rmp_register_obstacle(object)
-            #self.path_rrt_controller = PathRRTController(name=f"{self.name}_path_rrt_controller",
-            #                                              robot_articulation=self)
+            self.path_rrt_controller = PathRRTController(name=f"{self.name}_path_rrt_controller",
+                                                         robot_articulation=self)
+
+        # Register obstacles
+        for _, objects in self.isaac.objects.items():
+            for obj in objects:
+                self.register_obstacle_prim(obj)
 
     def update(self) -> None:
         self.rmp_update()
@@ -254,6 +263,20 @@ class OmniRobot(Robot):
             RigidPrim: [description]
         """
         return self._end_effector
+
+    def fk(self, joint_positions: Optional[np.array] = None, position_only=False) -> Optional[Tuple[np.array, np.array]]:
+        if self.ik_solver:
+            return self.ik_solver.fk(joint_positions, position_only)
+        return None
+
+    def follow_target(self, target_name: str):
+        if not target_name:
+            logger.error(f"[{self.robot_unique_name}]-follow_target(): target_name is empty")
+            return False
+        if not self.ik_solver:
+            logger.error(f"[{self.robot_unique_name}]-follow_target(): ik_solver is None")
+            return False
+        return True
 
     @property
     def gripper(self) -> Optional[Union[Gripper, ArticulationGripper]]:
@@ -282,19 +305,34 @@ class OmniRobot(Robot):
             robot_base_translation, robot_base_orientation = self.get_world_pose()
             rmpflow.set_robot_base_pose(robot_base_translation, robot_base_orientation)
 
-    def rmp_register_obstacle(self, obstacle: XFormPrim):
+    def register_obstacle(self, obstacle: omni.isaac.core.objects):
         if self.rmp_flow_controller:
+            self.rmp_flow_controller.add_obstacle(obstacle)  # !NOTE: Isaac still does not have this implemented yet!
+            if isinstance(obstacle, DynamicCapsule):
+                self.rmp_flow_controller.rmp_flow.add_capsule(obstacle) # Temp usage before rmp_flow.add_obstacle() is ready!
+                print(self.name, "-RMP FLOW CONTROLLER: ADD CAPSULE", obstacle.name)
+        if self.path_rrt_controller:
+            self.path_rrt_controller.add_obstacle(obstacle)
+            print(self.name, "-PATH RRT CONTROLLER ADD OBSTACLE", obstacle.name)
+
+    def register_obstacle_prim(self, obstacle: XFormPrim):
+        capsule = None
+        if self.rmp_flow_controller or self.path_rrt_controller:
+            # Temp hardcoding wrapping collision obstacle
             position, orientation = obstacle.get_world_pose()
-            obstacle_visual = VisualCapsule(
-                prim_path=f"{obstacle.prim_path}/visual",
+            capsule = DynamicCapsule(
+                prim_path=f"{obstacle.prim_path}/collision",
                 position=position,
                 orientation=orientation,
                 radius=0.1,
-                height=0.5
+                height=0.5,
+                color=np.array([1.0, 0.0, 0.0]),
+                mass=1.0
             )
-            self.rmp_flow_controller.rmp_flow.add_capsule(obstacle_visual)
+        self.register_obstacle(capsule)
 
     def create_target_following_task(self, task_name: str,
+                                     following_type: Optional[OmniTargetFollowingType] = OmniTargetFollowingType.RMP,
                                      target_name: Optional[str] = None,
                                      target_prim_path: Optional[str] = None,
                                      target_position: Optional[np.ndarray] = None,
@@ -303,20 +341,23 @@ class OmniRobot(Robot):
         """
         Args:
             task_name (str, optional): [description].
+            following_type (OmniTargetFollowingType, optional): [description].
             target_prim_path (Optional[str], optional): [description]. Defaults to None.
             target_name (Optional[str], optional): [description]. Defaults to None.
             target_position (Optional[np.ndarray], optional): [description]. Defaults to None.
             target_orientation (Optional[np.ndarray], optional): [description]. Defaults to None.
             offset (Optional[np.ndarray], optional): [description]. Defaults to None.
         """
-        # NOTE: This does not create task params yet, refer to FollowTarget class, which will be done in set_up_scene()
+        # NOTE: This does not create task params yet, which will be done in set_up_scene()
+        # Refer to OmniTargetFollowingTask class
         return OmniTargetFollowingTask(robot=self,
-                                    name=task_name,
-                                    target_name=target_name,
-                                    target_prim_path=target_prim_path,
-                                    target_position=target_position,
-                                    target_orientation=target_orientation,
-                                    offset=offset)
+                                       name=task_name,
+                                       following_type=following_type,
+                                       target_name=target_name,
+                                       target_prim_path=target_prim_path,
+                                       target_position=target_position,
+                                       target_orientation=target_orientation,
+                                       offset=offset)
 
     def create_path_planning_task(self, task_name: str,
                                   target_name: Optional[str] = None,
@@ -333,7 +374,8 @@ class OmniRobot(Robot):
             target_orientation (Optional[np.ndarray], optional): [description]. Defaults to None.
             offset (Optional[np.ndarray], optional): [description]. Defaults to None.
         """
-        # NOTE: This does not create task params yet, refer to FollowTarget class, which will be done in set_up_scene()
+        # NOTE: This does not create task params yet, which will be done in set_up_scene().
+        # Refer to OmniPathPlanningTask class
         return OmniPathPlanningTask(robot=self,
                                     name=task_name,
                                     target_name=target_name,

@@ -1,10 +1,12 @@
 import os
 from typing import Optional, Sequence, Union
 
+from pathlib import Path
 import numpy as np
 
 # Omniverse
 from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
+from omni.isaac.universal_robots import KinematicsSolver as URKinematicSolver
 
 # Cognarai
 from .omni_robot import OmniRobot
@@ -84,7 +86,7 @@ class UR10(OmniRobot):
                                                             "ur10_robot_description.yaml")
                 self.lula_description_path = os.path.join(self.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY,
                                                           "ur10", "ur10_robot.urdf")
-
+        self.ik_solver = URKinematicSolver(self, Path(end_effector_prim_name).stem, attach_gripper=True)
 
     def initialize(self, physics_sim_view=None) -> None:
         """[summary]"""
@@ -120,3 +122,16 @@ class UR10(OmniRobot):
                 curr_pos = Gf.Vec3d(curr_pos_f3[0], curr_pos_f3[1], curr_pos_f3[2])
                 curr_rot_f4 = curr_transform["rotation"]
                 curr_rot_quat = Gf.Quatd(curr_rot_f4[3], curr_rot_f4[0], curr_rot_f4[1], curr_rot_f4[2])
+
+    def follow_target(self, target_name: str):
+        if not super().follow_target(target_name):
+            return
+        observations = self.isaac.omni_world.get_observations()[target_name]
+        actions, succ = self.ik_solver.compute_inverse_kinematics(
+            target_position=observations["position"],
+            target_orientation=observations["orientation"],
+        )
+        if succ:
+            self.apply_action(actions)
+        else:
+            carb.log_warn(f"[{self.robot_unique_name}]: IK did not converge to a solution. No action is being taken.")

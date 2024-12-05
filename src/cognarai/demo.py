@@ -41,7 +41,7 @@ def main():
     #kitchen = Object("kitchen", ObjectType.ENVIRONMENT, "kitchen.urdf")
     ROBOT_MODEL_NAME = UR10_WITH_SHORT_SUCTION_MODEL #UR10E_ALLEGRO_MODEL #PR2_MODEL #FRANKA_MODEL #UR5E_ROBOTIQ_2F_140_MODEL #UR10_WITH_SHORT_SUCTION_MODEL
     ROBOT_DESCRIPTION_DIR_NAME = "iiwa_allegro_description" if ROBOT_MODEL_NAME == IIWA_ALLEGRO_MODEL else \
-                                 "pr2_description"  if ROBOT_MODEL_NAME == PR2_MODEL else assets_directory
+                                 "pr2_description" if ROBOT_MODEL_NAME == PR2_MODEL else assets_directory
     ROBOT_DESC_NAME = f"{ROBOT_DESCRIPTION_DIR_NAME}/{ROBOT_MODEL_NAME}.urdf"
     robot_name = f"{ROBOT_MODEL_NAME}_0"
     is_ur10_suction_robot = ROBOT_MODEL_NAME == UR10_WITH_SHORT_SUCTION_MODEL or ROBOT_MODEL_NAME == UR10_WITH_LONG_SUCTION_MODEL

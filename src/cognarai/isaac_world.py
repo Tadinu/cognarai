@@ -38,7 +38,7 @@ import omni.physx.scripts.utils as physxUtils
 
 # Cognarai
 from cognarai.isaac import Isaac, IsaacUSD
-from cognarai.isaac_common import IsaacCommon
+from cognarai.isaac_common import IsaacCommon, IsaacTaskId
 from cognarai.omni_robot import OmniRobot
 
 idle_tick = 0
@@ -110,26 +110,20 @@ class IsaacWorld(object):
         #self._init_extra_omniverse_extensions()
 
     def exec_loop(self):
-        if self.run_experiment is None:
-            for robot_model_name, robots in self.isaac.robots.items():
-                for robot in robots:
-                    # Create robot controller
-                    #Isaac().start_rmp_following(robot)
-                    #Isaac().start_path_planning(robot)
-                    #Isaac().start_simple_stacking(robot)
-                    Isaac().start_hanoi_tower(robot)
-        else:
+        task_id = IsaacTaskId.HANOI_TOWER
+        if self.run_experiment:
             print('RUN EXPERIMENT')
             self.run_experiment()
+        else:
+            for robot_model_name, robots in self.isaac.robots.items():
+                for robot in robots:
+                    Isaac().init_robot_task(task_id, robot)
+
         while isaac_sim_app.is_running():
             self.omni_world.step(render=True)  # necessary to visualize changes
             for robot_model_name, robots in self.isaac.robots.items():
                 for robot in robots:
-                    robot.update()
-                    #Isaac().step_rmp_following(robot)
-                    #Isaac().step_path_planning(robot)
-                    #Isaac().step_simple_stacking(robot)
-                    Isaac().step_hanoi_tower(robot)
+                    Isaac().step_robot_task(task_id, robot)
 
             #self.step()
 

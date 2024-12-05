@@ -1,6 +1,7 @@
 
 import os
 from typing_extensions import Dict, List, Optional, Type, Union, Callable, Tuple, TYPE_CHECKING
+from enum import Enum
 
 # Omniverse
 import carb
@@ -91,6 +92,14 @@ SIMPLE_ROOM_MODEL = "simple_room"
 IAI_KITCHEN_MODEL = "kitchen"
 UR10_MOUNT_MODEL = "ur10_mount"
 
+class IsaacTaskId(Enum):
+    TARGET_FOLLOWING = 1
+    PATH_PLANNING = 2
+    SIMPLE_STACKING = 3
+    MPC_CUROBO = 4
+    PICK_PLACE_CUROBO = 5
+    PICK_PLACE_PANDA = 6
+    HANOI_TOWER = 7
 
 class IsaacCommon(object, metaclass=Singleton):
     NUCLEUS_ASSETS_DIR: str = "Isaac/"
@@ -324,14 +333,20 @@ class IsaacCommon(object, metaclass=Singleton):
         }
 
         self.ROBOT_BASE_BODY_MODEL_NAMES: Dict[str, str] = {
+            UR5_MODEL: UR5_MODEL,
             UR5_ROBOTIQ_2F_85_MODEL: UR5_MODEL,
+            UR5E_MODEL: UR5E_MODEL,
             UR5E_ROBOTIQ_2F_140_MODEL: UR5E_MODEL,
+            UR10_MODEL: UR10_MODEL,
             UR10_WITH_LONG_SUCTION_MODEL: UR10_MODEL,
             UR10_WITH_SHORT_SUCTION_MODEL: UR10_MODEL,
-            FRANKA_ROBOTIQ_2F_140_MODEL: FRANKA_MODEL,
-            IIWA_ALLEGRO_MODEL: IIWA_MODEL,
+            UR10E_MODEL: UR10E_MODEL,
             UR10E_ALLEGRO_MODEL: UR10E_MODEL,
-            UR10E_ROBOTIQ_2F_140_MODEL: UR10E_MODEL
+            UR10E_ROBOTIQ_2F_140_MODEL: UR10E_MODEL,
+            FRANKA_MODEL: FRANKA_MODEL,
+            FRANKA_ROBOTIQ_2F_140_MODEL: FRANKA_MODEL,
+            IIWA_MODEL: IIWA_MODEL,
+            IIWA_ALLEGRO_MODEL: IIWA_MODEL
         }
 
         self.ROBOT_GRIPPER_MODEL_NAMES: Dict[str, str] = {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing_extensions import List, Optional, Tuple, TYPE_CHECKING
 from collections import OrderedDict
+from enum import Enum
 
 # Omniverse
 import carb
@@ -21,9 +22,13 @@ if TYPE_CHECKING:
     from .omni_robot import OmniRobot
 
 
-class OmniTargetFollowingTask(FollowTarget):
+class OmniTargetFollowingType(Enum):
+    IK = 1
+    RMP = 2
 
+class OmniTargetFollowingTask(FollowTarget):
     def __init__(self, name: str, robot: OmniRobot,
+                 following_type: OmniTargetFollowingType = OmniTargetFollowingType.RMP,
                  target_prim_path: Optional[str] = None,
                  target_name: Optional[str] = None,
                  target_position: Optional[np.ndarray] = None,
@@ -41,6 +46,7 @@ class OmniTargetFollowingTask(FollowTarget):
             offset=offset,
         )
         self._robot = robot
+        self._following_type = following_type
 
     @property
     def robot(self) -> OmniRobot:
@@ -48,6 +54,17 @@ class OmniTargetFollowingTask(FollowTarget):
 
     def set_robot(self) -> OmniRobot:
         return self._robot
+
+    @property
+    def following_type(self) -> OmniTargetFollowingType:
+        return self._following_type
+
+    def is_using_rmp(self):
+        return self._following_type is OmniTargetFollowingType.RMP
+
+    @property
+    def target_name(self) -> str:
+        return self._target_name
 
     def set_up_scene(self, scene: Scene) -> None:
         """
@@ -74,7 +91,6 @@ class OmniTargetFollowingTask(FollowTarget):
             target_name=self._target_name,
         )
 
-        self.robot.rmp_target_name = self.get_params()["target_name"]["value"]
         # NOTE: Don't add self.robot to scene here (like in super().set_up_scene()) since it may have been added outside earlier
         self._task_objects[self._robot.name] = self.robot
         self._move_task_objects_to_their_frame()
@@ -160,6 +176,7 @@ class OmniSimpleStackingTask(Stacking):
         super().pre_step(time_step_index=time_step_index, simulation_time=simulation_time)
         self.robot.update_gripper()
 
+# Ref: <ISAAC_SIM>/exts/omni.isaac.examples/omni/isaac/examples/path_planning/path_planning_task.py
 class OmniPathPlanningTask(BaseTask):
     def __init__(
         self,
@@ -192,6 +209,10 @@ class OmniPathPlanningTask(BaseTask):
     def set_robot(self) -> OmniRobot:
         return self._robot
 
+    @property
+    def target_name(self) -> str:
+        return self._target_name
+
     def set_up_scene(self, scene: Scene) -> None:
         """[summary]
 
@@ -199,7 +220,11 @@ class OmniPathPlanningTask(BaseTask):
             scene (Scene): [description]
         """
         super().set_up_scene(scene)
+
+        # Ground
         scene.add_default_ground_plane()
+
+        # Target
         if self._target_orientation is None:
             self._target_orientation = euler_angles_to_quat(np.array([-np.pi, 0, np.pi]))
         if self._target_prim_path is None:
@@ -218,7 +243,6 @@ class OmniPathPlanningTask(BaseTask):
         )
         # NOTE: Don't add self.robot to scene here since it may have been added outside earlier
         self._robot = self.set_robot()
-        self._robot.path_plan_target_name = self.get_params()["target_name"]["value"]
         self._task_objects[self._robot.name] = self._robot
         self._move_task_objects_to_their_frame()
 
@@ -337,6 +361,9 @@ class OmniPathPlanningTask(BaseTask):
 
         return
 
+    def add_obstacles(self):
+        self.add_obstacle()
+
     def add_obstacle(self, position: np.ndarray = None, orientation=None):
         """[summary]
 
@@ -364,6 +391,10 @@ class OmniPathPlanningTask(BaseTask):
             )
         )
         self._obstacle_walls[cube.name] = cube
+
+        # Register task's obstacles to robot
+        assert self.robot.physics_sim_view_inited, "Robot's physics sim view must be initialized before registering obstacles to it!"
+        self.robot.register_obstacle(cube)
         return cube
 
     def remove_obstacle(self, name: Optional[str] = None) -> None:
@@ -374,14 +405,16 @@ class OmniPathPlanningTask(BaseTask):
         """
         if name is not None:
             self.scene.remove_object(name)
+            self._robot.path_rrt_controller.remove_obstacle(self._obstacle_walls[name])
             del self._obstacle_walls[name]
         else:
             obstacle_to_delete = list(self._obstacle_walls.keys())[-1]
             self.scene.remove_object(obstacle_to_delete)
+            self._robot.path_rrt_controller.remove_obstacle(self._obstacle_walls[obstacle_to_delete])
             del self._obstacle_walls[obstacle_to_delete]
 
-    def get_obstacles(self) -> List:
-        return list(self._obstacle_walls.values())
+    def get_obstacles(self) -> OrderedDict[str, VisualCuboid]:
+        return self._obstacle_walls
 
     def get_obstacle_to_delete(self) -> None:
         """[summary]
