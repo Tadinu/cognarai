@@ -1,8 +1,7 @@
 from typing_extensions import TYPE_CHECKING
 
-from omni.isaac.core.prims.xform_prim import XFormPrim
-import omni.isaac.motion_generation as mg
-from omni.isaac.core.articulations import Articulation
+from isaacsim.core.prims import XFormPrim, RigidPrim, Articulation
+import isaacsim.robot_motion.motion_generation as mg
 
 
 class RMPFlowController(mg.MotionPolicyController):

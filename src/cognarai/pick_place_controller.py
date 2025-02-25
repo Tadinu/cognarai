@@ -2,11 +2,11 @@ from typing_extensions import List, Optional, TYPE_CHECKING
 import numpy as np
 
 # Omniverse/Isaac
-from omni.isaac.core.articulations import Articulation
-from omni.isaac.core.utils.rotations import euler_angles_to_quat
-from omni.isaac.core.utils.types import ArticulationAction
-from omni.isaac.manipulators.controllers import PickPlaceController as ManipulatorPickPlaceController
-from omni.isaac.manipulators.grippers.gripper import Gripper
+from isaacsim.core.prims import Articulation
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.robot.manipulators.controllers import PickPlaceController as ManipulatorPickPlaceController
+from isaacsim.robot.manipulators.grippers.gripper import Gripper
 
 
 class PickPlaceController(ManipulatorPickPlaceController):

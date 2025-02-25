@@ -2,10 +2,11 @@ from typing_extensions import List, Optional, Union, TYPE_CHECKING
 
 # Omniverse
 import numpy as np
-from omni.isaac.core.articulations import Articulation, ArticulationGripper
-from omni.isaac.core.utils.types import ArticulationAction
-from omni.isaac.manipulators.controllers import StackingController as ManipulatorStackingController
-from omni.isaac.manipulators.grippers.gripper import Gripper
+from isaacsim.core.prims import Articulation
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.api.articulations.articulation_gripper import ArticulationGripper
+from isaacsim.robot.manipulators.grippers.gripper import Gripper
+from isaacsim.robot.manipulators.controllers.stacking_controller import StackingController as ManipulatorStackingController
 
 # Cognarai
 from .pick_place_controller import PickPlaceController

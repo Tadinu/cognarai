@@ -18,7 +18,7 @@ except ImportError:
     pass
 
 # Omniverse/Isaac
-from omni.isaac.kit import SimulationApp
+from isaacsim import SimulationApp
 # This is required before importing any other omni pkgs, including carb
 # Ref: https://docs.omniverse.nvidia.com/isaacsim/latest/manual_standalone_python.html#simulationapp
 isaac_sim_app = SimulationApp(
@@ -30,10 +30,10 @@ isaac_sim_app = SimulationApp(
 )
 from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
 import omni.usd
-from omni.isaac.core.robots import Robot
-from omni.isaac.core.prims.xform_prim import XFormPrim
-from omni.isaac.core.utils.extensions import enable_extension
-import omni.isaac.core.utils.numpy.rotations as rotation_utils
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.prims import XFormPrim
+from isaacsim.core.utils.extensions import enable_extension
+import isaacsim.core.utils.numpy.rotations as rotation_utils
 import omni.physx.scripts.utils as physxUtils
 
 # Cognarai
@@ -81,7 +81,7 @@ class IsaacWorld(object):
 
     def _init_omniverse_world(self):
         # Omni world
-        self.omni_world = omni.isaac.core.World(stage_units_in_meters=1.0)
+        self.omni_world = isaacsim.core.api.world.World(stage_units_in_meters=1.0)
         assert self.omni_world.scene
         Isaac().set_omni_world(self.omni_world)
         IsaacUSD().set_omni_world(self.omni_world)
@@ -154,7 +154,7 @@ class IsaacWorld(object):
                                                object_model_path=entity_model_path,
                                                object_prim_path=entity_prim_path,
                                                position=position)
-            entity_prim = object_entity.prim
+            entity_prim = object_entity.prims[0]
 
         if entity_prim is None:
             return entity_id

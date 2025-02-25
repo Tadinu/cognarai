@@ -8,22 +8,22 @@ from typing_extensions import List, Optional, Sequence, Union, Tuple, TYPE_CHECK
 
 # Omniverse
 import numpy as np
-from omni.isaac.core.prims.xform_prim import XFormPrim
-from omni.isaac.core.prims.rigid_prim import RigidPrim
+from isaacsim.core.prims import XFormPrim, RigidPrim
 if TYPE_CHECKING:
-    import omni.isaac.core.objects
-from omni.isaac.core.objects import DynamicCapsule
-from omni.isaac.core.robots.robot import Robot
-from omni.isaac.core.articulations import Articulation, ArticulationGripper
-from omni.isaac.core.utils.prims import get_prim_at_path, is_prim_path_valid
-from omni.isaac.core.utils.stage import add_reference_to_stage, get_stage_units
-from omni.isaac.robot_assembler import AssembledRobot
-import omni.isaac.core.utils.numpy.rotations as rotation_utils
-from omni.isaac.core.controllers.base_controller import BaseController
-from omni.isaac.manipulators.grippers.gripper import Gripper
-from omni.isaac.manipulators.grippers.surface_gripper import SurfaceGripper
-from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
-from omni.isaac.motion_generation.articulation_kinematics_solver import ArticulationKinematicsSolver
+    import isaacsim.core.api.objects
+from isaacsim.core.api.objects import DynamicCapsule
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.prims import Articulation
+from isaacsim.core.api.articulations.articulation_gripper import ArticulationGripper
+from isaacsim.core.utils.prims import get_prim_at_path, is_prim_path_valid
+from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
+#from isaacsim.robot_setup.assembler import AssembledRobot
+import isaacsim.core.utils.numpy.rotations as rotation_utils
+from isaacsim.core.api.controllers.base_controller import BaseController
+from isaacsim.robot.manipulators.grippers.gripper import Gripper
+from isaacsim.robot.manipulators.grippers.surface_gripper import SurfaceGripper
+from isaacsim.robot.manipulators.grippers import ParallelGripper
+from isaacsim.robot_motion.motion_generation.articulation_kinematics_solver import ArticulationKinematicsSolver
 
 # Cognarai
 from cognarai.isaac_common import IsaacCommon
@@ -97,7 +97,8 @@ class OmniRobot(Robot):
                          orientation=orientation,
                          scale=scale,
                          visible=visible)
-        XFormPrim(prim_path).set_world_pose(position=position, orientation=orientation)
+        XFormPrim(prim_path).set_world_poses(positions=np.array(position).reshape(1, 3),
+                                             orientations=np.array(orientation).reshape(1, 4))
         self.articulation_root_path: str = articulation_root_path
         self.description_path: str = description_path  # udrf, mjcf
         self.lula_description_path: str = ""  # lula urdf, mjcf
@@ -107,7 +108,7 @@ class OmniRobot(Robot):
         # 2.1- EE
         self.end_effector_prim_path = end_effector_prim_name if end_effector_prim_name and is_prim_path_valid(end_effector_prim_name) \
             else None
-        self._end_effector: RigidPrim = RigidPrim(prim_path=self.end_effector_prim_path,
+        self._end_effector: RigidPrim = RigidPrim(prim_paths_expr=self.end_effector_prim_path,
                                                   name=f"{self.name}_end_effector") if self.end_effector_prim_path else None
 
         # 2.2- IK
@@ -305,7 +306,7 @@ class OmniRobot(Robot):
             robot_base_translation, robot_base_orientation = self.get_world_pose()
             rmpflow.set_robot_base_pose(robot_base_translation, robot_base_orientation)
 
-    def register_obstacle(self, obstacle: omni.isaac.core.objects):
+    def register_obstacle(self, obstacle: isaacsim.core.api.objects):
         if self.rmp_flow_controller:
             self.rmp_flow_controller.add_obstacle(obstacle)  # !NOTE: Isaac still does not have this implemented yet!
             if isinstance(obstacle, DynamicCapsule):
@@ -319,11 +320,11 @@ class OmniRobot(Robot):
         capsule = None
         if self.rmp_flow_controller or self.path_rrt_controller:
             # Temp hardcoding wrapping collision obstacle
-            position, orientation = obstacle.get_world_pose()
+            positions, orientations = obstacle.get_world_poses()
             capsule = DynamicCapsule(
-                prim_path=f"{obstacle.prim_path}/collision",
-                position=position,
-                orientation=orientation,
+                prim_path=f"{obstacle.prim_paths[0]}/collision",
+                position=positions[0],
+                orientation=orientations[0],
                 radius=0.1,
                 height=0.5,
                 color=np.array([1.0, 0.0, 0.0]),

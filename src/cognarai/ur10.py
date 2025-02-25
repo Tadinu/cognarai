@@ -6,7 +6,7 @@ import numpy as np
 
 # Omniverse
 from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
-from omni.isaac.universal_robots import KinematicsSolver as URKinematicSolver
+from isaacsim.robot.manipulators.examples.universal_robots import KinematicsSolver as URKinematicSolver
 
 # Cognarai
 from .omni_robot import OmniRobot

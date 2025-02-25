@@ -16,19 +16,18 @@ from cognarai.fabrics.helpers.functions import get_rotation_matrix
 import carb, omni.appwindow
 from carb.input import KeyboardInput
 import numpy as np
-from omni.isaac.core.prims.geometry_prim import GeometryPrim
-from omni.isaac.core.prims.xform_prim import XFormPrim
-from omni.isaac.core.prims.rigid_prim import RigidPrim
-from omni.isaac.core.scenes.scene import Scene
-from omni.isaac.core.robots.robot import Robot
-from omni.isaac.core.objects import DynamicCuboid, VisualSphere
-from omni.isaac.core.utils.prims import is_prim_path_valid
-from omni.isaac.core.utils.rotations import euler_angles_to_quat
-from omni.isaac.core.utils.stage import get_stage_units
-from omni.isaac.core.utils.string import find_unique_string_name
-from omni.isaac.core.tasks import BaseTask
-from omni.isaac.core.prims.base_sensor import BaseSensor
-from omni.isaac.core.utils.types import ArticulationAction
+from isaacsim.core.prims import XFormPrim, RigidPrim, GeometryPrim
+from isaacsim.core.api.scenes import Scene
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.api.objects import DynamicCuboid, VisualCuboid
+from isaacsim.core.utils.prims import is_prim_path_valid
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.core.utils.stage import get_stage_units
+from isaacsim.core.utils.string import find_unique_string_name
+from isaacsim.core.api.tasks import BaseTask
+
+from isaacsim.core.api.sensors.base_sensor import BaseSensor
+from isaacsim.core.utils.types import ArticulationAction
 
 # Cognarai
 from cognarai.omni_robot import OmniRobot

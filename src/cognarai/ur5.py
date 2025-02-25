@@ -6,7 +6,7 @@ import numpy as np
 
 # Cognarai
 from .omni_robot import OmniRobot
-from omni.isaac.universal_robots import KinematicsSolver as URKinematicSolver
+from isaacsim.robot.manipulators.examples.universal_robots import KinematicsSolver as URKinematicSolver
 from .isaac_common import *
 
 

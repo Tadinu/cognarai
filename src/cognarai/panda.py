@@ -6,9 +6,9 @@ from typing_extensions import List, Optional, Sequence
 import numpy as np
 
 # Omniverse/Isaac
-from omni.isaac.core.utils.stage import get_stage_units
-from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
-from omni.isaac.franka import KinematicsSolver as FrankaKinematicsSolver
+from isaacsim.core.utils.stage import get_stage_units
+from isaacsim.robot.manipulators.grippers import ParallelGripper
+from isaacsim.robot.manipulators.examples.franka import KinematicsSolver as FrankaKinematicsSolver
 
 # Cognarai
 from .omni_robot import OmniRobot

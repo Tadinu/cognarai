@@ -2,17 +2,19 @@ import os
 from typing_extensions import Optional
 
 import carb
+import omni.kit
 import numpy as np
-import omni.isaac.core.objects
-import omni.isaac.motion_generation.interface_config_loader as interface_config_loader
-from omni.isaac.core.articulations import Articulation
-from omni.isaac.core.controllers.base_controller import BaseController
-from omni.isaac.core.utils.types import ArticulationAction
-from omni.isaac.motion_generation import ArticulationTrajectory
-from omni.isaac.motion_generation.lula import RRT
-from omni.isaac.motion_generation.lula.trajectory_generator import LulaCSpaceTrajectoryGenerator
-from omni.isaac.motion_generation.path_planner_visualizer import PathPlannerVisualizer
-from omni.isaac.motion_generation.path_planning_interface import PathPlanner
+import isaacsim.core.api.objects
+import isaacsim.robot_motion.motion_generation.interface_config_loader as interface_config_loader
+from isaacsim.core.prims import Articulation
+from isaacsim.core.api.controllers.base_controller import BaseController
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.robot_motion.motion_generation import ArticulationTrajectory
+from isaacsim.robot_motion.motion_generation import ArticulationTrajectory
+from isaacsim.robot_motion.motion_generation.lula import RRT
+from isaacsim.robot_motion.motion_generation.lula.trajectory_generator import LulaCSpaceTrajectoryGenerator
+from isaacsim.robot_motion.motion_generation.path_planner_visualizer import PathPlannerVisualizer
+from isaacsim.robot_motion.motion_generation.path_planning_interface import PathPlanner
 
 # Ref: <ISAAC_SIM>/exts/omni.isaac.examples/omni/isaac/examples/path_planning/path_planning_controller.py
 class PathPlannningController(BaseController):
@@ -107,13 +109,13 @@ class PathPlannningController(BaseController):
 
         return self._action_sequence.pop(0)
 
-    def add_obstacle(self, obstacle: omni.isaac.core.objects, static: bool = False) -> None:
+    def add_obstacle(self, obstacle: isaacsim.core.api.objects, static: bool = False) -> None:
         if self._path_planner:
             self._path_planner.add_obstacle(obstacle, static)
         else:
             print(f"[{self._name}]: Path planner not supported")
 
-    def remove_obstacle(self, obstacle: omni.isaac.core.objects) -> None:
+    def remove_obstacle(self, obstacle: isaacsim.core.api.objects) -> None:
         if self._path_planner:
             self._path_planner.remove_obstacle(obstacle)
         else:
@@ -141,6 +143,7 @@ class PathRRTController(PathPlannningController):
         assert self.robot, f"Robot {robot_articulation.name} is expected to be an instance of {OmniRobot}"
 
         # Load default RRT config files stored in the omni.isaac.motion_generation extension
+        #print(interface_config_loader.get_supported_robot_policy_pairs())
         rrt_config = interface_config_loader.load_supported_path_planner_config(self.robot.robot_model_name,
                                                                                 "RRT",
                                                                                 self.robot.isaac_common.PATH_PLAN_EXTERNAL_CONFIGS_DIRECTORY)

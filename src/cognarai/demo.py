@@ -13,7 +13,6 @@ a = torch.zeros(
 import os
 
 # Third Party
-import carb
 import numpy as np
 
 from pathlib import Path

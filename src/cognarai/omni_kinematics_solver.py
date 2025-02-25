@@ -3,16 +3,16 @@ from typing_extensions import Optional, Tuple, TYPE_CHECKING
 import numpy as np
 
 # Omniverse
-import omni.isaac.motion_generation.interface_config_loader as interface_config_loader
-from omni.isaac.core.articulations import Articulation
-from omni.isaac.motion_generation.articulation_kinematics_solver import ArticulationKinematicsSolver
-from omni.isaac.motion_generation.lula.kinematics import LulaKinematicsSolver
+import isaacsim.robot_motion.motion_generation.interface_config_loader as interface_config_loader
+from isaacsim.core.prims import Articulation
+from isaacsim.robot_motion.motion_generation.articulation_kinematics_solver import ArticulationKinematicsSolver
+from isaacsim.robot_motion.motion_generation.lula.kinematics import LulaKinematicsSolver
 
 # Cognarai
 from cognarai.omni_robot import OmniRobot
 
 class OmniKinematicsSolver(ArticulationKinematicsSolver):
-    """Kinematics Solver for OmniRobot.  This class loads a LulaKinematicsSovler object
+    """Kinematics Solver for OmniRobot.  This class loads a LulaKinematicsSolver object
 
     Args:
         robot (OmniRobot): An initialized robot
@@ -20,6 +20,8 @@ class OmniKinematicsSolver(ArticulationKinematicsSolver):
     """
 
     def __init__(self, robot: OmniRobot, end_effector_frame_name: str) -> None:
+        #print(interface_config_loader.get_supported_robot_policy_pairs())
+        #print(interface_config_loader.get_supported_robots_with_lula_kinematics())
         kinematics_config = interface_config_loader.load_supported_lula_kinematics_solver_config(
             robot.isaac_common.get_robot_base_body_model_name(robot.robot_model_name),
             robot.isaac_common.RMP_EXTERNAL_CONFIGS_DIRECTORY

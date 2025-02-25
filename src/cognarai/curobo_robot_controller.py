@@ -1,22 +1,22 @@
 import os
 from typing import Optional
 
-import numpy
 import numpy as np
 
 import torch
 import carb
-from omni.isaac.core import World
-from omni.isaac.core.objects import DynamicCuboid, cuboid
-from omni.isaac.core.prims import RigidPrim
-from omni.isaac.core.robots import Robot
-from omni.isaac.core.scenes.scene import Scene
-from omni.isaac.core.controllers import BaseController
-from omni.isaac.core.tasks import BaseTask, Stacking, PickPlace
-from omni.isaac.core.utils.prims import is_prim_path_valid
-from omni.isaac.core.utils.stage import get_stage_units
-from omni.isaac.core.utils.string import find_unique_string_name
-from omni.isaac.core.utils.types import ArticulationAction
+from isaacsim.core.api.world import World
+from isaacsim.core.prims import XFormPrim, RigidPrim
+from isaacsim.core.api.scenes import Scene
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.api.objects import DynamicCuboid, VisualCuboid
+from isaacsim.core.api.controllers.base_controller import BaseController
+from isaacsim.core.utils.prims import is_prim_path_valid
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.core.utils.stage import get_stage_units
+from isaacsim.core.utils.string import find_unique_string_name
+from isaacsim.core.api.tasks import BaseTask, Stacking, PickPlace
+from isaacsim.core.utils.types import ArticulationAction
 
 # CuRobo
 from curobo.geom.sdf.world import CollisionCheckerType
@@ -163,7 +163,7 @@ class CuroboRobotController(BaseController):
         self.mpc_target_past_pose = None
         self.mpc_cmd_state_full = None
         # Make a target to follow
-        self.mpc_target = cuboid.VisualCuboid(
+        self.mpc_target = VisualCuboid(
             "/World/target",
             position=np.array([0.5, 0, 0.5]),
             orientation=np.array([0, 1, 0, 0]),
@@ -595,7 +595,7 @@ class CuroboBoxStackTask(Stacking):
         """
         joints_state = self._robot.get_joints_state()
         end_effector_position, _ = self._robot.end_effector.get_local_pose() if self._robot.end_effector \
-            else RigidPrim(prim_path=self._robot.end_effector_prim_path).get_local_pose()
+            else RigidPrim(prim_paths_expr=self._robot.end_effector_prim_path).get_local_pose()
         observations = {
             self._robot.name: {
                 "joint_positions": joints_state.positions if joints_state else np.zeros(3),

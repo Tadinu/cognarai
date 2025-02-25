@@ -5,12 +5,12 @@ from enum import Enum
 
 # Omniverse
 import carb
-from omni.isaac.core.robots import Robot
-from omni.isaac.core.articulations import ArticulationGripper
-from omni.isaac.core.utils.nucleus import get_assets_root_path
-from omni.isaac.manipulators.grippers.gripper import Gripper
-from omni.isaac.manipulators.grippers.surface_gripper import SurfaceGripper
-from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.api.articulations.articulation_gripper import ArticulationGripper
+from isaacsim.storage.native import get_assets_root_path
+from isaacsim.robot.manipulators.grippers.gripper import Gripper
+from isaacsim.robot.manipulators.grippers.surface_gripper import SurfaceGripper
+from isaacsim.robot.manipulators.grippers import ParallelGripper
 
 if TYPE_CHECKING:
     from .omni_robot import OmniRobot

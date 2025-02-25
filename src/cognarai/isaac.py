@@ -24,38 +24,42 @@ import carb.settings
 from carb.settings import ISettings
 import omni
 import omni.usd
+import omni.ext
 import usdrt
 from usdrt import Usd
+from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
+
 # Omniverse-Isaac
-from omni.isaac.core.robots import Robot
-from omni.isaac.core.objects import sphere
-from omni.isaac.core.tasks import BaseTask
-from omni.isaac.core.prims.xform_prim import XFormPrim
-from omni.isaac.core.prims.rigid_prim import RigidPrim
-from omni.isaac.core.articulations import Articulation, ArticulationGripper
-from omni.isaac.core.utils.types import ArticulationAction
-from omni.isaac.core.utils.rotations import euler_angles_to_quat
-from omni.isaac.core.utils.stage import add_reference_to_stage, get_stage_units
-from omni.isaac.core.utils.viewports import set_camera_view
-from omni.isaac.core.utils.semantics import add_update_semantics
-from omni.isaac.core.utils.prims import create_prim, get_prim_at_path, is_prim_path_valid
-import omni.isaac.core.utils.numpy.rotations as rotation_utils
-from omni.isaac.core.utils.string import find_unique_string_name
-from omni.isaac.robot_assembler import AssembledRobot, RobotAssembler
-from omni.isaac.sensor import Camera
+import isaacsim
+from isaacsim.core.api.world import World
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.api.objects import VisualSphere
+from isaacsim.core.api.tasks.base_task import BaseTask
+from isaacsim.core.prims import XFormPrim, RigidPrim, Articulation
+from isaacsim.core.api.articulations.articulation_gripper import ArticulationGripper
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
+from isaacsim.core.utils.viewports import set_camera_view
+from isaacsim.core.utils.semantics import add_update_semantics
+from isaacsim.core.utils.prims import create_prim, get_prim_at_path, is_prim_path_valid
+import isaacsim.core.utils.numpy.rotations as rotation_utils
+from isaacsim.core.utils.string import find_unique_string_name
+from isaacsim.sensors.camera import Camera
+#from isaacsim.robot_setup.assembler import RobotAssembler
+#from isaacsim.asset.gen.omap.bindings import _omap as occupancy_map_manager
+#from isaacsim.asset.gen.omap.utils import compute_coordinates, generate_image, update_location
+from isaacsim.asset.importer.urdf import _urdf as omni_urdf
+from isaacsim.asset.importer.mjcf import _mjcf as omni_mjcf
+
 from omni.kit.viewport.utility import get_active_viewport
 import omni.physx.scripts.physicsUtils as physicsUtils
 import omni.physx.bindings._physx as PhysX
 #from omni.physx import get_physx_simulation_interface
+
+# Deprecated
 from omni.isaac.dynamic_control import _dynamic_control as dynamic_control_manager
 from omni.isaac.dynamic_control import utils as dynamic_control_utils
-from omni.isaac.occupancy_map.bindings import _occupancy_map as occupancy_map_manager
-from omni.isaac.occupancy_map.utils import compute_coordinates, generate_image, update_location
-from omni.importer.urdf import _urdf as omni_urdf
-from omni.importer.mjcf import _mjcf as omni_mjcf
-from omni.isaac.core.prims.xform_prim import XFormPrim
-from omni.isaac.core.utils.prims import is_prim_path_valid
-from pxr import Usd, UsdGeom, UsdPhysics, UsdShade, Sdf, Gf, Tf, PhysxSchema
 
 # CuRobo
 from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModel, CudaRobotModelState, CudaRobotModelConfig
@@ -91,7 +95,7 @@ class IsaacUSD(object, metaclass=Singleton):
         self.omni_world = None
         self.omni_stage = None
 
-    def set_omni_world(self, world: omni.isaac.core.World):
+    def set_omni_world(self, world: isaacsim.core.api.world.World):
         self.omni_world = world
         self.omni_stage = world.stage
 
@@ -178,13 +182,13 @@ class Isaac(object, metaclass=Singleton):
         self.dynamic_control_interface = None
         self.occupancy_map_interface = None
         self.occupancy_map_generator = None
-        self.robot_assembler: RobotAssembler = None
+        self.robot_assembler = None
         self.init_tools()
 
         self.robot_tasks: Dict[IsaacTaskId, Tuple[Callable, Callable, Callable]]
         self.init_robot_tasks()
 
-    def set_omni_world(self, world: omni.isaac.core.World):
+    def set_omni_world(self, world: isaacsim.core.api.world.World):
         self.omni_world = world
         self.omni_stage = world.stage
 
@@ -197,8 +201,15 @@ class Isaac(object, metaclass=Singleton):
         # Dc freq, only settable after stage loading
         dynamic_control_utils.set_physics_frequency(60)
 
+        # Occupancy map
+        #self.init_occupancy_map_manager()
+
+        # Robot Assembler
+        #self.init_robot_assembler()
+
+    def init_occupancy_map_manager(self):
         # Occupancy
-        self.occupancy_map_interface = occupancy_map_manager.acquire_occupancy_map_interface()
+        self.occupancy_map_interface = occupancy_map_manager.acquire_omap_interface()
         self.occupancy_map_generator = occupancy_map_manager.Generator(self.physx_interface,
                                                                        omni.usd.get_context().get_stage_id())
         generator = self.occupancy_map_generator
@@ -207,7 +218,7 @@ class Isaac(object, metaclass=Singleton):
         generator.generate2d()
         assert len(generator.get_buffer()) == 0
 
-        # Robot assembler
+    def init_robot_assembler(self):
         self.robot_assembler = RobotAssembler()
 
     def load_entity_config(self, urdf_file_path: str) -> None:
@@ -337,7 +348,7 @@ class Isaac(object, metaclass=Singleton):
         q = torch.rand((10, kinematics_model.get_dof()), **(self.tensor_device.as_torch_dict()))
         return kinematics_model.get_state(q, ee_link_name)
 
-    def spawn_object(self, world: omni.isaac.core.World,
+    def spawn_object(self, world: isaacsim.core.api.world.World,
                      object_model_path: str,
                      object_prim_path: str,
                      position: np.array = np.array([0, 0, 0]),
@@ -381,9 +392,10 @@ class Isaac(object, metaclass=Singleton):
         #massAPI.CreateCenterOfMassAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
 
         # Make object rigid prim to set its world pose
-        object = RigidPrim(name=f"{Path(object_prim_path).name}", prim_path=object_prim_path, mass=0.1, position=position,
-                           orientation=orientation)
-        object.set_world_pose(position=position, orientation=orientation)
+        object = RigidPrim(name=f"{Path(object_prim_path).name}", prim_paths_expr=object_prim_path, masses=[0.1],
+                           positions=np.array(position).reshape(1, 3),
+                           orientations=np.array(orientation).reshape(1, 4))
+        #object.set_world_poses(positions=([position]), orientations=([orientation]))
 
         # Add object to scene
         world.scene.add(object)
@@ -401,12 +413,13 @@ class Isaac(object, metaclass=Singleton):
 
         return object
 
-    def spawn_robot(self, world: omni.isaac.core.World,
+    def spawn_robot(self, world: isaacsim.core.api.world.World,
                     robot_model_name: str,
                     robot_description_path: str,
                     robot_prim_path: str,
                     subroot: str = "",
                     position: np.array = np.array([0, 0, 0]),
+                    orientation: np.array = np.array([1, 0, 0, 0]),
                     visualize_robot_spheres: bool = False) -> Optional[Robot]:
         if not Path(robot_description_path).exists():
             assert False, f"{robot_description_path} does not exist!"
@@ -481,6 +494,7 @@ class Isaac(object, metaclass=Singleton):
                 articulation_root_path=robot_articulation_root_path,
                 name=robot_name,
                 position=position,
+                orientation=orientation,
                 end_effector_prim_name=f"{robot_prim_path}/{robot_kinematics_config.ee_links[0]}"
                 if robot_model_name != PR2_MODEL else robot_kinematics_config.ee_links[0]
             )
@@ -1049,7 +1063,7 @@ class Isaac(object, metaclass=Singleton):
 
         ######################################
         '''
-        from omni.isaac.core.objects import DynamicCuboid
+        from isaacsim.core.api.objects import DynamicCuboid
         cube_2 = self.omni_world.scene.add(
             DynamicCuboid(
                 prim_path="/new_cube_2",

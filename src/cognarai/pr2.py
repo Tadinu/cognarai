@@ -4,7 +4,7 @@ from typing_extensions import List, Optional, Sequence
 import numpy as np
 
 # Omniverse/Isaac
-from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
+from isaacsim.robot.manipulators.grippers import ParallelGripper
 
 # Cognarai
 from .omni_robot import OmniRobot

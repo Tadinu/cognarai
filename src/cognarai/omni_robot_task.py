@@ -6,16 +6,19 @@ from enum import Enum
 # Omniverse
 import carb
 import numpy as np
-from omni.isaac.core.prims.xform_prim import XFormPrim
-from omni.isaac.core.prims.rigid_prim import RigidPrim
-from omni.isaac.core.scenes.scene import Scene
-from omni.isaac.core.robots.robot import Robot
-from omni.isaac.core.objects import DynamicCuboid, VisualCuboid
-from omni.isaac.core.utils.prims import is_prim_path_valid
-from omni.isaac.core.utils.rotations import euler_angles_to_quat
-from omni.isaac.core.utils.stage import get_stage_units
-from omni.isaac.core.utils.string import find_unique_string_name
-from omni.isaac.core.tasks import FollowTarget, BaseTask, Stacking
+from isaacsim.core.prims import XFormPrim, RigidPrim
+from isaacsim.core.api.scenes import Scene
+from isaacsim.core.api.robots import Robot
+from isaacsim.core.api.objects import DynamicCuboid, VisualCuboid
+from isaacsim.core.api.tasks import BaseTask
+from isaacsim.core.api.tasks.follow_target import FollowTarget
+from isaacsim.core.api.tasks.stacking import Stacking
+#from isaacsim.core.api.tasks.pick_place import PickPlace
+from isaacsim.core.utils.prims import is_prim_path_valid
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.core.utils.stage import get_stage_units
+from isaacsim.core.utils.string import find_unique_string_name
+
 
 # Cognarai
 if TYPE_CHECKING:
