@@ -173,6 +173,7 @@ class IsaacCommon(object, metaclass=Singleton):
                 DOFBOT_MODEL: "Robots/Dofbot/dofbot.usd",
                 FRANKA_MODEL: "Robots/Franka/franka.usd",
                 FRANKA_WITH_ALT_FINGERS_MODEL: "Robots/Franka/franka_alt_fingers.usd",
+                FRANKA_ROBOTIQ_2F_140_MODEL: "panda_robotiq_2f_140.usd",
                 UR5_MODEL: "Robots/UniversalRobots/ur5/ur5.usd",
                 UR5E_MODEL: "Robots/UniversalRobots/ur5e/ur5e.usd",
                 UR5_ROBOTIQ_2F_85_MODEL: "ur5_robotiq_2f_85.usd",

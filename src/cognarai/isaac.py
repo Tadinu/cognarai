@@ -520,7 +520,7 @@ class Isaac(object, metaclass=Singleton):
             ee = robot_kinematics_config.ee_links[0]
             sph_list = robot_kin_model.get_robot_as_spheres(default_config, ee)
             for si, s in enumerate(sph_list[0]):
-                sp = sphere.VisualSphere(
+                sp = VisualSphere(
                     name=f"{robot_model_name}_sphere_{si}",
                     prim_path=f"/World/curobo/{robot_model_name}_sphere_{si}",
                     position=np.ravel(s.position) + position,

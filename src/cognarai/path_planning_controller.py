@@ -142,7 +142,7 @@ class PathRRTController(PathPlannningController):
         self.robot: OmniRobot = robot_articulation if isinstance(robot_articulation, OmniRobot) else None
         assert self.robot, f"Robot {robot_articulation.name} is expected to be an instance of {OmniRobot}"
 
-        # Load default RRT config files stored in the omni.isaac.motion_generation extension
+        # Load default RRT config files stored in the isaacsim.robot_motion.motion_generation extension
         #print(interface_config_loader.get_supported_robot_policy_pairs())
         rrt_config = interface_config_loader.load_supported_path_planner_config(self.robot.robot_model_name,
                                                                                 "RRT",
