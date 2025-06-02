@@ -1,0 +1,11 @@
+defaults:
+  - _self_
+  - mppi: franka_cabinet_mppi
+
+n_steps: 1500
+entity_names: []
+nx: 24
+
+hydra:
+  searchpath:
+    - pkg://cfg/task

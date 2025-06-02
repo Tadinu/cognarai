@@ -1,7 +1,10 @@
 src/cognarai/_version.py
 src/cognarai/assets/
-src/cognarai.egg-info/
-src/cognarai/__pycache__/
+*.egg-info/
+*/*/__pycache__/
+*/*/*/__pycache__/
+*/*/*/*/__pycache__/
+*/*/*/*/*/__pycache__/
 *.zip
 *bku.yaml
 ACTIVATE_ISAAC_ENV.sh
