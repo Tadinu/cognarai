@@ -1,14 +1,20 @@
 """
 Source: https://github.com/tud-amr/mppi_torch
 """
-import torch
-import numpy as np
-from typing import Optional, List, Callable, Union
-from torch.distributions.multivariate_normal import MultivariateNormal
-from scipy import signal
-import scipy.interpolate as si
 from dataclasses import dataclass
 from abc import ABC
+from typing import Optional, List, Callable, Union
+
+# numpy
+import numpy as np
+
+# scipy
+from scipy import signal
+import scipy.interpolate as si
+
+# torch
+import torch
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 # cognarai
 from cognarai.mppi.mppi_utils import generate_gaussian_halton_samples, scale_ctrl, cost_to_go
@@ -108,20 +114,21 @@ class MPPITorch(ABC):
     """
 
     def __init__(self, cfg: Union[MPPIConfig, dict], nx: int, dynamics: Callable, running_cost: Callable,
-                 prior: Optional[Callable] = None):
+                 prior: Optional[Callable] = None, dtype: Optional[torch.dtype] = torch.double):
         if type(cfg) is not MPPIConfig:
             cfg = MPPIConfig(**cfg)
 
         # Parameters for mppi and sampling method
         self.mppi_mode = cfg.mppi_mode
         self.sample_method = cfg.sampling_method
+        self.dtype = dtype
+        self.device = cfg.device
 
         # Utility vars
         self.K = cfg.num_samples        # N_SAMPLES 
         self.T = cfg.horizon            # TIMESTEPS
         self.filter_u = cfg.filter_u    # Flag for Sav-Gol filter
         self.lambda_ = cfg.lambda_
-        self.tensor_args={'device':cfg.device, 'dtype':torch.float32}
         self.delta = None
         self.sample_null_action = cfg.sample_null_action
         self.sample_previous_plan = cfg.sample_previous_plan
@@ -177,7 +184,7 @@ class MPPITorch(ABC):
         self.nu = 1 if len(self.noise_sigma.shape) == 0 else self.noise_sigma.shape[0]
         
         # Moments and best trajectory
-        self.mean_action = torch.zeros(self.nu, device=self.tensor_args['device'], dtype=self.tensor_args['dtype'])
+        self.mean_action = torch.zeros(self.nu, device=self.device, dtype=self.dtype)
         self.best_traj = self.mean_action.clone()
 
         # Sampled results from last command
@@ -199,7 +206,7 @@ class MPPITorch(ABC):
         self.n_knots = self.T//self.knot_scale
         self.ndims = self.n_knots * self.nu
         self.degree = 1                 # From sample_lib storm is 2
-        self.Z_seq = torch.zeros(1, self.T, self.nu, **self.tensor_args)
+        self.Z_seq = torch.zeros(1, self.T, self.nu, device=self.device, dtype=self.dtype)
         self.cov_action = torch.diagonal(self.noise_sigma, 0)
         self.scale_tril = torch.sqrt(self.cov_action)
         self.squash_fn = 'clamp'
@@ -208,7 +215,7 @@ class MPPITorch(ABC):
         # Discount
         self.gamma = cfg.rollout_var_discount 
         self.gamma_seq = torch.cumprod(torch.tensor([1.0] + [self.gamma] * (self.T - 1)),dim=0).reshape(1, self.T)
-        self.gamma_seq = self.gamma_seq.to(**self.tensor_args)
+        self.gamma_seq = self.gamma_seq.to(device=self.device, dtype=self.dtype)
         self.beta = 1 # param storm
 
         # Filtering
@@ -231,6 +238,20 @@ class MPPITorch(ABC):
 
     def _running_cost(self, state: torch.Tensor):
         return self.running_cost(state)
+
+    def reset(self):
+        """
+        Clear controller state after finishing a trial
+        """
+        self.U = self.noise_dist.sample((self.T,))
+
+    def shift_nominal_trajectory(self):
+        """
+        Shift the nominal trajectory forward one step
+        """
+        # shift command 1 time step
+        self.U = torch.roll(self.U, -1, dims=0)
+        self.U[-1] = self.u_init
 
     def _exp_util(self, costs, actions):
         """
@@ -270,13 +291,13 @@ class MPPITorch(ABC):
                 self.ndims,                 # n_knots * nu (knots per number of actions)
                 use_ghalton=True,
                 seed_val=self.seed_val,     # seed val is 0 
-                device=self.tensor_args['device'],
-                float_dtype=self.tensor_args['dtype'])
+                device=self.device,
+                float_dtype=self.dtype)
             
             # Sample splines from knot points:
             # iteratre over action dimension:
             knot_samples = self.knot_points.view(sample_shape, self.nu, self.n_knots) # n knots is T/knot_scale (30/4 = 7)
-            self.samples = torch.zeros((sample_shape, self.T, self.nu), **self.tensor_args)
+            self.samples = torch.zeros((sample_shape, self.T, self.nu), device=self.device, dtype=self.dtype)
             for i in range(sample_shape):
                 for j in range(self.nu):
                     self.samples[i,:,j] = bspline(knot_samples[i,j,:], n=self.T, degree=self.degree)
@@ -293,7 +314,7 @@ class MPPITorch(ABC):
         
         if not torch.is_tensor(state):
             state = torch.tensor(state)
-        self.state = state.to(dtype=self.tensor_args['dtype'], device=self.tensor_args['device'])
+        self.state = state.to(dtype=self.dtype, device=self.device)
 
         if self.mppi_mode == 'simple':
             self.U = torch.roll(self.U, -1, dims=0)
@@ -340,7 +361,7 @@ class MPPITorch(ABC):
                 mode='interp', 
                 cval=0.0
                 )
-            if self.tensor_args['device'] == "cpu":
+            if self.device == "cpu":
                 action = torch.from_numpy(u_filtered).to('cpu')
             else:
                 action = torch.from_numpy(u_filtered).to('cuda')
@@ -358,8 +379,8 @@ class MPPITorch(ABC):
         K, T, nu = perturbed_actions.shape
         assert nu == self.nu
 
-        cost_total = torch.zeros(K, device=self.tensor_args['device'], dtype=self.tensor_args['dtype'])
-        cost_horizon = torch.zeros([K, T], device=self.tensor_args['device'], dtype=self.tensor_args['dtype'])
+        cost_total = torch.zeros(K, device=self.device, dtype=self.dtype)
+        cost_horizon = torch.zeros([K, T], device=self.device, dtype=self.dtype)
         cost_samples = cost_total
 
         # allow propagation of a sample of states (ex. to carry a distribution), or to start with a single state
@@ -550,3 +571,172 @@ class MPPITorch(ABC):
         """
         top_cost, top_idx = torch.topk(-self.total_costs, n)
         return self.states[top_idx], -top_cost
+
+
+class TimeKernel:
+    """Kernel acting on the time dimension of trajectories for use in interpolation and smoothing"""
+
+    def __call__(self, t, tk):
+        raise NotImplementedError
+
+
+class RBFKernel(TimeKernel):
+    def __init__(self, sigma=1):
+        self.sigma = sigma
+
+    def __repr__(self):
+        return f"RBFKernel(sigma={self.sigma})"
+
+    def __call__(self, t, tk):
+        d = torch.sum((t[:, None] - tk) ** 2, dim=-1)
+        k = torch.exp(-d / (1e-8 + 2 * self.sigma ** 2))
+        return k
+
+
+class KMPPITorch(MPPITorch):
+    """MPPI with kernel interpolation of control points for smoothing"""
+
+    def __init__(self, *args, num_support_pts=None, kernel: TimeKernel = RBFKernel(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_support_pts = num_support_pts or self.T // 2
+        # control points to be sampled
+        self.theta = torch.zeros((self.num_support_pts, self.nu), dtype=self.dtype, device=self.device)
+        self.Tk = None
+        self.Hs = None
+        # interpolation kernel
+        self.interpolation_kernel = kernel
+        self.intp_krnl = None
+        self.prepare_vmap_interpolation()
+
+    def reset(self):
+        super().reset()
+        self.theta.zero_()
+
+    def shift_nominal_trajectory(self):
+        super().shift_nominal_trajectory()
+        self.theta, _ = self.do_kernel_interpolation(self.Tk[0] + 1, self.Tk[0], self.theta)
+
+    def do_kernel_interpolation(self, t, tk, c):
+        K = self.interpolation_kernel(t.unsqueeze(-1), tk.unsqueeze(-1))
+        Ktktk = self.interpolation_kernel(tk.unsqueeze(-1), tk.unsqueeze(-1))
+        # print(K.shape, Ktktk.shape)
+        # row normalize K
+        # K = K / K.sum(dim=1).unsqueeze(1)
+
+        # KK = K @ torch.inverse(Ktktk)
+        KK = torch.linalg.solve(Ktktk, K, left=False)
+
+        return torch.matmul(KK, c), K
+
+    def prepare_vmap_interpolation(self):
+        self.Tk = torch.linspace(0, self.T - 1, int(self.num_support_pts), device=self.device, dtype=self.dtype).unsqueeze(
+            0).repeat(self.K, 1)
+        self.Hs = torch.linspace(0, self.T - 1, int(self.T), device=self.device, dtype=self.dtype).unsqueeze(0).repeat(
+            self.K, 1)
+        self.intp_krnl = torch.vmap(self.do_kernel_interpolation)
+
+    def deparameterize_to_trajectory_single(self, theta):
+        return self.do_kernel_interpolation(self.Hs[0], self.Tk[0], theta)
+
+    def deparameterize_to_trajectory_batch(self, theta):
+        assert theta.shape == (self.K, self.num_support_pts, self.nu)
+        return self.intp_krnl(self.Hs, self.Tk, theta)
+
+    def _compute_perturbed_action_and_noise(self):
+        # parallelize sampling across trajectories
+        # resample noise each time we take an action
+        noise = self.noise_dist.rsample((self.K, self.num_support_pts))
+        perturbed_control_pts = self.theta + noise
+        # control points in the same space as control and should be bounded
+        perturbed_control_pts = self._bound_action(perturbed_control_pts)
+        self.noise_theta = perturbed_control_pts - self.theta
+
+        # Sample bound control
+        self.perturbed_action = self._sample_specific_actions()
+        self.perturbed_action = self._bound_action(self.perturbed_action)
+        # bounded noise after bounding (some got cut off, so we don't penalize that in action cost)
+        self.noise = self.perturbed_action - self.U
+
+    def _sample_specific_actions(self):
+        return self._sample_actions_halton()
+
+    def _sample_actions_halton(self):
+        """
+            Samples Halton splines once and then shifts mean according to control distribution. If random sampling is selected
+            then samples random noise at each step. Mean of control distribution is updated using gradient
+        """
+        if self.sample_method == 'random':
+            self.delta = self.get_samples(self.K, base_seed=0)
+        elif self.delta is None and self.sample_method == 'halton':
+            self.delta = self.get_samples(self.K, base_seed=0)
+            # add zero-noise seq so mean is always a part of samples
+
+        # Add zero-noise seq so mean is always a part of samples
+        if self.sample_previous_plan:
+            self.delta[-1, :, :] = self.Z_seq
+        # Keeps the size but scales values
+        scaled_delta = torch.matmul(self.delta, torch.diag(self.scale_tril)).view(self.delta.shape[0], self.T, self.nu)
+
+        # First time mean is zero then it is updated in the distribution
+        act_seq = self.mean_action + scaled_delta
+
+        # Scales action within bounds. act_seq is the same as perturbed actions
+        act_seq = scale_ctrl(act_seq, self.u_min, self.u_max, squash_fn=self.squash_fn)
+        act_seq[:, :, :] = self.best_traj
+
+        return torch.clone(act_seq)
+
+    def command(self, state, shift_nominal_trajectory: Optional[bool]=True):
+        """
+        :param state: (nx) or (K x nx) current state, or samples of states (for propagating a distribution of states)
+        :param shift_nominal_trajectory: Whether to roll the nominal trajectory forward one step. This should be True
+            if the command is to be executed. If the nominal trajectory is to be refined then it should be False.
+        :returns action: (nu) best action
+        """
+        if shift_nominal_trajectory:
+            self.shift_nominal_trajectory()
+        return self._command(state)
+
+    def _command(self, state):
+        if not torch.is_tensor(state):
+            state = torch.tensor(state)
+        self.state = state.to(dtype=self.dtype, device=self.device)
+        cost_total = self._compute_total_cost_batch()
+
+        self._compute_weighting(cost_total)
+        perturbations = torch.sum(self.omega.view(-1, 1, 1) * self.noise_theta, dim=0)
+
+        self.theta = self.theta + perturbations
+        self.U, _ = self.deparameterize_to_trajectory_single(self.theta)
+
+        action = self.U[:self.u_per_command]
+        # reduce dimensionality if we only need the first command
+        if self.u_per_command == 1:
+            action = action[0]
+        return action
+
+    def _compute_weighting(self, cost_total):
+        beta = torch.min(cost_total)
+        self.cost_total_non_zero = _ensure_non_zero(cost_total, beta, 1 / self.lambda_)
+        eta = torch.sum(self.cost_total_non_zero)
+        self.omega = (1. / eta) * self.cost_total_non_zero
+        return self.omega
+
+    def _compute_total_cost_batch(self):
+        # Update [self.perturbed_action] here-in
+        self._compute_perturbed_action_and_noise()
+        if self.noise_abs_cost:
+            action_cost = self.lambda_ * torch.abs(self.noise) @ self.noise_sigma_inv
+            # NOTE: The original paper does self.lambda_ * torch.abs(self.noise) @ self.noise_sigma_inv, but this biases
+            # the actions with low noise if all states have the same cost. With abs(noise) we prefer actions close to the
+            # nomial trajectory.
+        else:
+            action_cost = self.lambda_ * self.noise @ self.noise_sigma_inv  # Like original paper
+
+        rollout_cost, self.states, actions = self._compute_rollout_costs(self.perturbed_action)
+        self.actions = actions / self.u_scale
+
+        # action perturbation cost
+        perturbation_cost = torch.sum(self.U * action_cost, dim=(1, 2))
+        self.cost_total = rollout_cost + perturbation_cost
+        return self.cost_total

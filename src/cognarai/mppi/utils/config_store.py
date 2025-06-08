@@ -29,7 +29,7 @@ class MPPITaskCfg(MPPITaskBaseCfg):
         return cls(**parent_data, **kwargs)
 
     def __post_init__(self):
-        self.nx = self.env.action_space
+        self.nx = 0
 
 # NOTE: omegaconf, used by hydra, still does not support Callable, Literal, which are used in lots of IsaacLab cfg classes
 # -> So, cannot preload a MPPIEnvCfg into memory here

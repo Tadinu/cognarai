@@ -72,6 +72,8 @@ def main():
     sim_cfg.device = args_cli.device
     sim_cfg.num_envs = 1
     sim_cfg.use_fabric = not args_cli.disable_fabric
+    env_cfg.viewer.eye = [1.0, 1.0, 2.0]
+    env_cfg.viewer.lookat = [0.0, 0.0, 1.0]
 
     # create environment
     env = MPPIEnv(cfg=env_cfg, num_envs=sim_cfg.num_envs)

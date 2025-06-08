@@ -52,6 +52,7 @@ class MPPIEnvCfg(MPPIBaseEnvCfg):
     viewer = ViewerCfg(
         eye=[7.5, 7.5, 7.5]
     )
+
     # env
     substeps: int = 2
     use_gpu_pipeline: bool = True

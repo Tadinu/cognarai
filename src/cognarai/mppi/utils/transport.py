@@ -11,4 +11,4 @@ def torch_to_bytes(t: torch.Tensor) -> bytes:
 
 def bytes_to_torch(b: bytes) -> torch.Tensor:
     buff = io.BytesIO(b)
-    return torch.load(buff)
+    return torch.load(buff, weights_only=True)

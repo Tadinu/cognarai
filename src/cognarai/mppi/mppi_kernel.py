@@ -8,7 +8,6 @@ import typing
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 from arm_pytorch_utilities import handle_batch_input
-from functorch import vmap
 
 logger = logging.getLogger(__name__)
 
@@ -577,7 +576,7 @@ class KMPPI(BaseMPPI):
             0).repeat(self.K, 1)
         self.Hs = torch.linspace(0, self.T - 1, int(self.T), device=self.d, dtype=self.dtype).unsqueeze(0).repeat(
             self.K, 1)
-        self.intp_krnl = vmap(self.do_kernel_interpolation)
+        self.intp_krnl = torch.vmap(self.do_kernel_interpolation)
 
     def deparameterize_to_trajectory_single(self, theta):
         return self.do_kernel_interpolation(self.Hs[0], self.Tk[0], theta)
