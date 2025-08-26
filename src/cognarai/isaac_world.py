@@ -154,7 +154,7 @@ class IsaacWorld(object):
                                                object_model_path=entity_model_path,
                                                object_prim_path=entity_prim_path,
                                                position=position)
-            entity_prim = object_entity.prims[0]
+            entity_prim = object_entity.prim
 
         if entity_prim is None:
             return entity_id

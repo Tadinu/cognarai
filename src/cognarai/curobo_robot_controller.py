@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import carb
 from isaacsim.core.api.world import World
-from isaacsim.core.prims import XFormPrim, RigidPrim
+from isaacsim.core.prims import XFormPrim, SingleRigidPrim
 from isaacsim.core.api.scenes import Scene
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.api.objects import DynamicCuboid, VisualCuboid
@@ -595,7 +595,7 @@ class CuroboBoxStackTask(Stacking):
         """
         joints_state = self._robot.get_joints_state()
         end_effector_position, _ = self._robot.end_effector.get_local_pose() if self._robot.end_effector \
-            else RigidPrim(prim_paths_expr=self._robot.end_effector_prim_path).get_local_pose()
+            else SingleRigidPrim(prim_path=self._robot.end_effector_prim_path).get_local_pose()
         observations = {
             self._robot.name: {
                 "joint_positions": joints_state.positions if joints_state else np.zeros(3),

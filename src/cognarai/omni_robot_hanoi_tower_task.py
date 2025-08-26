@@ -5,7 +5,7 @@ from collections import OrderedDict
 # Omniverse
 import carb
 import numpy as np
-from isaacsim.core.prims import XFormPrim, RigidPrim
+from isaacsim.core.prims import XFormPrim
 from isaacsim.core.api.scenes import Scene
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.api.objects import DynamicCylinder, VisualCylinder
@@ -145,11 +145,11 @@ class OmniHanoiTowerTask(BaseTask):
             dict: [description]
         """
         joints_state = self._robot.get_joints_state()
-        end_effector_positions, _ = self._robot.end_effector.get_local_poses()
+        end_effector_position, _ = self._robot.end_effector.get_local_pose()
         observations = {
             self._robot.name: {
                 "joint_positions": joints_state.positions,
-                "end_effector_position": end_effector_positions[0],
+                "end_effector_position": end_effector_position,
             }
         }
         for i in range(self._num_of_disks):

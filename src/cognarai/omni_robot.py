@@ -8,7 +8,7 @@ from typing_extensions import List, Optional, Sequence, Union, Tuple, TYPE_CHECK
 
 # Omniverse
 import numpy as np
-from isaacsim.core.prims import XFormPrim, RigidPrim
+from isaacsim.core.prims import XFormPrim, SingleRigidPrim
 if TYPE_CHECKING:
     import isaacsim.core.api.objects
 from isaacsim.core.api.objects import DynamicCapsule
@@ -20,10 +20,12 @@ from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
 #from isaacsim.robot_setup.assembler import AssembledRobot
 import isaacsim.core.utils.numpy.rotations as rotation_utils
 from isaacsim.core.api.controllers.base_controller import BaseController
+from isaacsim.robot.manipulators import SingleManipulator
 from isaacsim.robot.manipulators.grippers.gripper import Gripper
 from isaacsim.robot.manipulators.grippers.surface_gripper import SurfaceGripper
 from isaacsim.robot.manipulators.grippers import ParallelGripper
 from isaacsim.robot_motion.motion_generation.articulation_kinematics_solver import ArticulationKinematicsSolver
+from pxr import Usd
 
 # Cognarai
 from cognarai.isaac_common import IsaacCommon
@@ -35,7 +37,7 @@ from cognarai.omni_robot_task import (OmniSimpleStackingTask, OmniTargetFollowin
                                       OmniPathPlanningTask)
 from cognarai.omni_robot_hanoi_tower_task import OmniHanoiTowerTask
 
-
+# NOTE: Refer to [SingleManipulator] for end_effector, gripper setup details
 class OmniRobot(Robot):
     """[summary]
 
@@ -81,17 +83,19 @@ class OmniRobot(Robot):
         self.robot_model_name: str = robot_model_name
         self.robot_unique_name: str = name
         self.robot_prim_path: str = prim_path
+        self.robot_prim: Usd.Prim = None
         self.active_dof_num: int = 0
         self.ik_solver: Optional[ArticulationKinematicsSolver] = None
         self.physics_sim_view_inited: bool = False
 
         # 1- Robot prim from [usd_path] if not existing
         if not is_prim_path_valid(prim_path):
-            robot_prim = add_reference_to_stage(
+            self.robot_prim = add_reference_to_stage(
                 usd_path=self.isaac_common.get_entity_default_full_usd_path(robot_model_name),
                 prim_path=prim_path)
-            assert robot_prim
-        super().__init__(prim_path=articulation_root_path, name=name,
+            assert self.robot_prim
+        super().__init__(prim_path=prim_path, name=name,
+                         #end_effector_prim_path=end_effector_prim_name,
                          position=position,
                          translation=translation,
                          orientation=orientation,
@@ -106,10 +110,12 @@ class OmniRobot(Robot):
         self.assembled_body: Optional[AssembledRobot] = assembled_body
 
         # 2.1- EE
-        self.end_effector_prim_path = end_effector_prim_name if end_effector_prim_name and is_prim_path_valid(end_effector_prim_name) \
-            else None
-        self._end_effector: RigidPrim = RigidPrim(prim_paths_expr=self.end_effector_prim_path,
-                                                  name=f"{self.name}_end_effector") if self.end_effector_prim_path else None
+        # NOTE: NO need for [is_prim_path_valid(end_effector_prim_name)], which just verifies it already exists
+        self.end_effector_prim_path = end_effector_prim_name
+        self._end_effector = SingleRigidPrim(
+            prim_path=self.end_effector_prim_path,
+            name=f"{self.name}_end_effector"
+        ) if is_prim_path_valid(self.end_effector_prim_path) else None
 
         # 2.2- IK
         from cognarai.omni_kinematics_solver import OmniKinematicsSolver
@@ -134,11 +140,20 @@ class OmniRobot(Robot):
         if attach_extra_gripper:
             gripper_model_name = self.isaac_common.get_robot_gripper_model_name(robot_model_name)
             gripper_usd_path = self.isaac_common.get_entity_default_full_usd_path(gripper_model_name)
+            # Create [gripper] from USD, using it as [self._end_effector] if not already valid above
             if gripper_usd_path:
                 from .isaac_common import LONG_SUCTION_GRIPPER_MODEL, SHORT_SUCTION_GRIPPER_MODEL
                 if gripper_model_name == LONG_SUCTION_GRIPPER_MODEL or gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL:
+                    self.robot_prim.GetVariantSet("Gripper").SetVariantSelection(
+                        "Short_Suction" if gripper_model_name == SHORT_SUCTION_GRIPPER_MODEL
+                        else "Long_Suction")
                     #NOTE:If attaching to [end_effector_prim_path], gripper usd should not already have articulation configured
                     add_reference_to_stage(usd_path=gripper_usd_path, prim_path=self.end_effector_prim_path)
+                    if not self._end_effector:
+                        self._end_effector = SingleRigidPrim(
+                            prim_path=self.end_effector_prim_path,
+                            name=f"{self.name}_end_effector"
+                        )
             elif not has_builtin_gripper:
                 logger.error(f"[{robot_model_name}:{self.robot_unique_name}] has no gripper model [{gripper_model_name}]'s usd configured")
 
@@ -150,7 +165,7 @@ class OmniRobot(Robot):
             elif issubclass(gripper_class, SurfaceGripper):
                 self._gripper = gripper_class(
                     end_effector_prim_path=self.end_effector_prim_path,
-                    translate=0.1611, direction="x"
+                    surface_gripper_path=f"{self.end_effector_prim_path}/SurfaceGripper",
                 )
             elif issubclass(gripper_class, ParallelGripper):
                 self._gripper = gripper_class(
@@ -257,11 +272,11 @@ class OmniRobot(Robot):
         return self.task_controller._pick_place_controller if isinstance(self.task_controller, StackingController) else None
 
     @property
-    def end_effector(self) -> Optional[RigidPrim]:
+    def end_effector(self) -> Optional[SingleRigidPrim]:
         """[summary]
 
         Returns:
-            RigidPrim: [description]
+            SingleRigidPrim: [description]
         """
         return self._end_effector
 
@@ -320,11 +335,11 @@ class OmniRobot(Robot):
         capsule = None
         if self.rmp_flow_controller or self.path_rrt_controller:
             # Temp hardcoding wrapping collision obstacle
-            positions, orientations = obstacle.get_world_poses()
+            position, orientation = obstacle.get_world_pose()
             capsule = DynamicCapsule(
-                prim_path=f"{obstacle.prim_paths[0]}/collision",
-                position=positions[0],
-                orientation=orientations[0],
+                prim_path=f"{obstacle.prim_path}/collision",
+                position=position,
+                orientation=orientation,
                 radius=0.1,
                 height=0.5,
                 color=np.array([1.0, 0.0, 0.0]),

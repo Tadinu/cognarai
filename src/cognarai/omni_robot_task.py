@@ -6,7 +6,7 @@ from enum import Enum
 # Omniverse
 import carb
 import numpy as np
-from isaacsim.core.prims import XFormPrim, RigidPrim
+from isaacsim.core.prims import XFormPrim
 from isaacsim.core.api.scenes import Scene
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.api.objects import DynamicCuboid, VisualCuboid

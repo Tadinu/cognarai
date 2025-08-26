@@ -27,6 +27,8 @@ class PickPlaceController(ManipulatorPickPlaceController):
         end_effector_initial_height: Optional[float] = None,
         events_dt: Optional[List[float]] = None,
     ) -> None:
+        if events_dt is None:
+            events_dt = [0.01, 0.0035, 0.01, 1.0, 0.008, 0.005, 0.005, 1, 0.01, 0.08]
         from .omni_robot import OmniRobot
         self.robot: OmniRobot = robot_articulation if isinstance(robot_articulation, OmniRobot) else None
         assert self.robot, f"Robot {robot_articulation.name} is expected to be an instance of {OmniRobot}"

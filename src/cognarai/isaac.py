@@ -35,7 +35,7 @@ from isaacsim.core.api.world import World
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.api.objects import VisualSphere
 from isaacsim.core.api.tasks.base_task import BaseTask
-from isaacsim.core.prims import XFormPrim, RigidPrim, Articulation
+from isaacsim.core.prims import XFormPrim, SingleRigidPrim, Articulation
 from isaacsim.core.api.articulations.articulation_gripper import ArticulationGripper
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.rotations import euler_angles_to_quat
@@ -352,7 +352,8 @@ class Isaac(object, metaclass=Singleton):
                      object_model_path: str,
                      object_prim_path: str,
                      position: np.array = np.array([0, 0, 0]),
-                     orientation: np.array = np.array(euler_angles_to_quat([0, 0, 0], degrees=True))) -> Optional[RigidPrim]:
+                     orientation: np.array = np.array(euler_angles_to_quat([0, 0, 0], degrees=True))) \
+        -> Optional[SingleRigidPrim]:
         # Only create object if [object_prim_path] does not exist yet
         # -> Also means [object_prim_path] must be unique!
         if is_prim_path_valid(object_prim_path):
@@ -392,9 +393,9 @@ class Isaac(object, metaclass=Singleton):
         #massAPI.CreateCenterOfMassAttr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
 
         # Make object rigid prim to set its world pose
-        object = RigidPrim(name=f"{Path(object_prim_path).name}", prim_paths_expr=object_prim_path, masses=[0.1],
-                           positions=np.array(position).reshape(1, 3),
-                           orientations=np.array(orientation).reshape(1, 4))
+        object = SingleRigidPrim(name=f"{Path(object_prim_path).name}", prim_path=object_prim_path, mass=0.1,
+                                 position=position,
+                                 orientation=orientation)
         #object.set_world_poses(positions=([position]), orientations=([orientation]))
 
         # Add object to scene

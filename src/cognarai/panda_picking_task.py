@@ -16,7 +16,7 @@ from cognarai.fabrics.helpers.functions import get_rotation_matrix
 import carb, omni.appwindow
 from carb.input import KeyboardInput
 import numpy as np
-from isaacsim.core.prims import XFormPrim, RigidPrim, GeometryPrim
+from isaacsim.core.prims import XFormPrim, GeometryPrim
 from isaacsim.core.api.scenes import Scene
 from isaacsim.core.api.robots import Robot
 from isaacsim.core.api.objects import DynamicCuboid, VisualCuboid

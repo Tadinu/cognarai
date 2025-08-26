@@ -1,6 +1,6 @@
 from typing_extensions import TYPE_CHECKING
 
-from isaacsim.core.prims import XFormPrim, RigidPrim, Articulation
+from isaacsim.core.prims import XFormPrim, Articulation
 import isaacsim.robot_motion.motion_generation as mg
 
 

@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 import os
 
 import casadi as ca
-import deprecation
 import numpy as np
 
 from forwardkinematics.fksCommon.fk import ForwardKinematics
@@ -52,8 +51,7 @@ class LeafNotFoundError(Exception):
     pass
 
 
-@deprecation.deprecated(deprecated_in="0.8.8", removed_in="0.9",
-                        details="Remove the goal attribute angle and rotate the position before passing it into compute_action.")
+#TODO: "Remove the goal attribute angle and rotate the position before passing it into compute_action."
 def compute_rotation_matrix(angles) -> np.ndarray:
     if isinstance(angles, float):
         angle = angles
