@@ -1,5 +1,8 @@
 src/cognarai/_version.py
 src/cognarai/assets/
+src/cognarai/mpc/mfr/data/
+src/cognarai/mpc/mfr/*.pkl
+.idea/
 *.egg-info/
 */*/__pycache__/
 */*/*/__pycache__/
