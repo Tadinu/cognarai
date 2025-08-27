@@ -14,7 +14,8 @@ print("ISAACLAB_NUCLEUS_DIR:", ISAACLAB_NUCLEUS_DIR)
 
 class IsaacApp:
     def __init__(self, app_launcher:AppLauncher,
-                 interactive_scene_cfg: InteractiveSceneCfg,
+                 sim_cfg: Optional[SimulationCfg] = None,
+                 interactive_scene_cfg: Optional[InteractiveSceneCfg] = None,
                  args: Optional[Any] = None):
         # Args
         self._args = args
@@ -23,12 +24,12 @@ class IsaacApp:
         self._sim_app = app_launcher.app
 
         # Sim
-        self._sim_cfg = SimulationCfg(dt=0.005, device=args.device)
+        self._sim_cfg = sim_cfg if sim_cfg else SimulationCfg(dt=0.005, device=args.device)
         self._sim_context = SimulationContext(self._sim_cfg)
 
         # Scene
         # NOTE: Must be after init [SimulationCfg]
-        self._interactive_scene = InteractiveScene(interactive_scene_cfg)
+        self._interactive_scene = InteractiveScene(interactive_scene_cfg) if interactive_scene_cfg else None
 
     def _setup_scene(self):
         # Main camera
