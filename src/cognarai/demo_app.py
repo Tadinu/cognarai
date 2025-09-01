@@ -14,6 +14,11 @@ AppLauncher.add_app_launcher_args(parser) # [parser] is updated here with IsaacL
 args = parser.parse_args()
 app_launcher = AppLauncher(args)
 
+# Enable IsaacSim extensions
+from isaacsim.core.utils.extensions import enable_extension
+enable_extension("isaacsim.robot.manipulators")
+enable_extension("isaacsim.robot_motion.motion_generation")
+
 # Cognarai
 from cognarai.isaac_app import IsaacApp
 from cognarai.isaac import Isaac
