@@ -9,7 +9,7 @@ mode: 'simulation'  # choose from 'simulation', 'hardware', 'hardware_copy'
 simulator: "isaac_gym" # choose from 'isaac_sim', 'isaac_gym'
 fingers: ['index', 'middle', 'thumb']
 object_type: 'batarang'
-sim_device: 'cpu'
+sim_device: 'cuda:0'
 device: 'cuda:0'
 friction_coefficient: 0.95
 kp: 3.0

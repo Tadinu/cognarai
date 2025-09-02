@@ -12,30 +12,31 @@ Isaac Lab API (see docs linked in the chat response for references).
 
 from __future__ import annotations
 from typing import Tuple, Optional, Sequence
+import os
 import pathlib
 import math
+import yaml
 
 # Third-party
-import numpy as np
 import torch
-import pytorch_kinematics as pk
+#import pytorch_kinematics as pk
 import pytorch_kinematics.transforms as tf
 
 # Isaac Lab
 from isaaclab_assets.robots.allegro import ALLEGRO_HAND_CFG
 from isaaclab.utils import configclass
 from isaaclab.utils.math import euler_xyz_from_quat
-from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sim import PhysxCfg, SimulationCfg, GroundPlaneCfg, spawn_ground_plane
+from isaaclab.sim import PhysxCfg, SimulationCfg
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
-from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
+from isaaclab.assets import ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab_tasks.direct.inhand_manipulation.inhand_manipulation_env import InHandManipulationEnv
 from isaaclab_tasks.direct.allegro_hand.allegro_hand_env_cfg import AllegroHandEnvCfg
 
-MODELS_DIR = f"{pathlib.Path(__file__).parent.resolve()}/models"
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_DIR  = f"{CURRENT_DIR}/config"
+MODELS_DIR = f"{CURRENT_DIR}/models"
 ALLEGRO_URDF_DIR = f"{MODELS_DIR}/allegro_xela"
 
 # -----------------------------------------------------------------------------
@@ -111,11 +112,17 @@ class AllegroManipEnvCfg(AllegroHandEnvCfg):
     ]
     fingers: list[str] = [] #['index', 'middle', 'thumb'] # 'ring'
     fingertip_body_names: list[str] = [
-        "hitosashi_ee", # Index~
-        "naka_ee", # Middle~
-        #"kusuri_ee", # Ring~
-        "oya_ee",# Thumb~
+        "allegro_hand_hitosashi_finger_finger_0_aftc_base_link",
+        "allegro_hand_naka_finger_finger_1_aftc_base_link",
+        "allegro_hand_kusuri_finger_finger_2_aftc_base_link",
+        "allegro_hand_oya_finger_3_aftc_base_link",
     ]
+    finger_ee_names: dict[str, list[str]] = {
+        'index': fingertip_body_names[0],
+        'middle': fingertip_body_names[1],
+        'ring': fingertip_body_names[2],
+        'thumb': fingertip_body_names[3],
+    }
 
     # Physics stepping
     sim: SimulationCfg = SimulationCfg(
@@ -199,6 +206,9 @@ class AllegroManipEnv(InHandManipulationEnv):
     def __init__(self, cfg: AllegroManipEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
+        # Config
+        self.manip_cfg = cfg
+
         # World, obj transf
         self.world_trans = tf.Transform3d(pos=cfg.robot_init_pose[0], rot=cfg.robot_init_pose[1], device=self.device)
         self.object_init_pos = torch.tensor(cfg.obj_pos, device=self.device)
@@ -206,15 +216,15 @@ class AllegroManipEnv(InHandManipulationEnv):
         # Others
         self.finger_names = cfg.fingers
         self.finger_to_joint_index = {
-            'index': [0, 1, 2, 3],
-            'middle': [8, 9, 10, 11],
-            'ring': [4, 5, 6, 7],
-            'thumb': [12, 13, 14, 15]
+            'index': [0, 4, 5, 6],
+            'middle': [1, 7, 8, 9],
+            'ring': [2, 10, 11, 12],
+            'thumb': [3, 13, 14, 15]
         }
 
         body_names = self.hand.data.body_names
         self.finger_ee_index = {
-            finger: [body_names.index(fingertip_name) for fingertip_name in self.cfg.fingertip_body_names]
+            finger: [body_names.index(cfg.finger_ee_names[finger])]
             for finger in self.finger_names
         }
 
@@ -246,9 +256,6 @@ class AllegroManipEnv(InHandManipulationEnv):
             self.screwdriver: RigidObject = RigidObject(self.cfg.screwdriver_cfg)
             self.scene.rigid_objects["screwdriver"] = self.screwdriver
 
-    def _get_rewards(self) -> torch.Tensor:
-        return super()._get_rewards()
-
     def get_distance2goal(self):
         state = self.get_state()
         obj_state = state[:, -self.num_hand_dofs:]
@@ -259,6 +266,12 @@ class AllegroManipEnv(InHandManipulationEnv):
                                               torch.tensor(self.goal_pos.as_matrix()).repeat(self.num_envs, 1, 1),
                                               cos_angle=False).detach().cpu().abs()
         return distance2goal
+
+    def get_root_state(self) -> torch.Tensor:
+        return self.hand.data.root_state_w.clone()
+
+    def get_dof_state(self) -> torch.Tensor:
+        return torch.concatenate([self.hand_dof_pos.clone(), self.hand_dof_vel.clone()])
 
     def get_state(self):
         arm_q = {
@@ -358,6 +371,7 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
         ),
         init_state=RigidObjectCfg.InitialStateCfg(pos=(0, 0, 0.31), rot=(1.0, 0.0, 0.0, 0.0)),
     )
+    object_cfg = cuboid_cfg
 
     # action/observation sizes; action -> 16 allegro joint deltas
     action_space: int = 16
@@ -367,7 +381,6 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
     default_q: float = 0.0
 
     def __post_init__(self):
-        self.object_cfg = self.cuboid_cfg
         self.robot_cfg.init_state.pos = [-0.1, -0.025, 0.30]
         self.robot_cfg.init_state.rot = [0.258819, 0, 0, 0.9659258]
         #self.viewer.eye = [0.3, 0.3, 0.48]
@@ -419,37 +432,32 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
         assert isinstance(self.cfg, AllegroCuboidTurningCfg)
 
         # spawn cuboid
-        self.cuboid = RigidObject(self.cfg.cuboid_cfg)
+        self.cuboid = self.object
         self.scene.rigid_objects["cuboid"] = self.cuboid
 
     def _get_rewards(self) -> torch.Tensor:
-        return super()._get_rewards()
+        reward = super()._get_rewards()
 
         assert len(self.actions.shape) == 2
         state = self.get_state()
 
         # goal cost
-        obj_state = state[:, -self.obj_dof:]
-        obj_pos = obj_state[:, :3]
-        obj_ori = obj_state[:, 3:]
+        obj_pos = self.object_pos
+        obj_ori = self.object_rot
 
         cuboid_upright_cost = (obj_ori[:, 0] ** 2) + (obj_ori[:, 2] ** 2)
         reward -= 1000 * cuboid_upright_cost
 
-        reward -= 10.0 * torch.sum((obj_pos - self.goal_pos[:, :3]) ** 2, dim=-1).to(self.device)
-        distance2goal = self.get_distance2goal()
-        reward -= 10 * torch.pow(distance2goal, 2).to(self.device)
-
-        # dropp_flag = state[:, -4] < -0.1
+        dropp_flag = state[:, -4] < -0.07
         # reward -= 1000 * dropp_flag.to(self.device)
         # dropping cost
-        reward -= 1e6 * ((state[:, -4] < -0.07) * state[:, -4]) ** 2
+        reward -= 1e6 * (dropp_flag * state[:, -4]) ** 2
 
         # action_cost
         reward -= 50.0 * (torch.norm(self.actions, dim=-1) ** 2)
 
         # small penalty for high joint velocities
-        reward -= 0.01 * torch.linalg.norm(self.hand.data.joint_vel, dim=-1, keepdims=True)
+        reward -= 0.01 * torch.linalg.norm(self.hand_dof_vel)
         return reward
 
     def get_state(self):
@@ -489,7 +497,38 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
         # set per-env target yaw (e.g. random target in [-pi,pi])
         self.target_yaw[env_ids] = (torch.rand(N, device=self.device) - 0.5) * 2 * math.pi
 
-def get_env(task, img_save_dir, config, num_envs=1) -> AllegroManipEnv:
+def get_task_config(task_name: Optional[str]=None):
+    if not task_name:
+        task_name = 'cuboid_turning'
+    if task_name == 'screwdriver_turning':
+        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_screwdriver.yaml').read_text())
+        config['obj_dof_code'] = [0, 0, 0, 1, 1, 1]
+        config['num_env_force'] = 1
+    elif task_name == 'valve_turning':
+        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_valve.yaml').read_text())
+        config['obj_dof_code'] = [0, 0, 0, 0, 1, 0]
+        config['num_env_force'] = 0
+    elif task_name == 'cuboid_turning':
+        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_cuboid_turning.yaml').read_text())
+        config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
+        config['num_env_force'] = 0
+    elif task_name == 'cuboid_alignment':
+        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_cuboid_alignment.yaml').read_text())
+        config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
+        config['num_env_force'] = 1
+    elif task_name == 'reorientation':
+        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_reorientation.yaml').read_text())
+        config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
+        config['num_env_force'] = 0
+    else:
+        raise ValueError(f'Unknown task {task_name}')
+
+    obj_dof = sum(config['obj_dof_code'])
+    config['obj_dof'] = obj_dof
+    config['task'] = task_name
+    return config
+
+def get_env(task, task_config) -> AllegroManipEnv:
     if task == 'screwdriver_turning':
         """
         return AllegroScrewdriverTurningEnv(num_envs=num_envs,
@@ -522,7 +561,7 @@ def get_env(task, img_save_dir, config, num_envs=1) -> AllegroManipEnv:
                                 )
         """
     elif task == 'cuboid_turning':
-        return AllegroCuboidTurningEnv()
+        return AllegroCuboidTurningEnv(fingers=task_config['fingers'])
     elif task == 'cuboid_alignment':
         """
         return AllegroCuboidAlignmentEnv()

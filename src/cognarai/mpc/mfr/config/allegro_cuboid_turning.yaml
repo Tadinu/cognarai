@@ -10,11 +10,11 @@ mode: 'simulation'  # choose from 'simulation', 'hardware', 'hardware_copy'
 simulator: "isaac_sim" # choose from 'isaac_sim', 'isaac_gym'
 fingers: ['index', 'middle', 'thumb'] #'ring'
 object_type: 'short_cuboid'
-sim_device: 'cpu'
+sim_device: 'cuda:0'
 device: 'cuda:0'
 friction_coefficient: 0.95
 kp: 6.0 # kp is increased to compenstate for gravity
-visualize_plan: True
+visualize_plan: False
 force_balance: False  # in addition to the torque balance, do we also need force balance, just for the screwdriver turning experiment w\o slot. 
 gradual_control: True
 gravity: True  # whether to use gravity in the simulation

@@ -40,6 +40,10 @@ class IsaacApp:
     def sim_app(self):
         return self._sim_app
 
+    @property
+    def is_running(self):
+        return self._sim_app.is_running()
+
     def run(self):
         self._sim_context.reset()
 
