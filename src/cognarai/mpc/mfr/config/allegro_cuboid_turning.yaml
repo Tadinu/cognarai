@@ -1,7 +1,7 @@
 ---
-T: 10
+T: 1
 receding_horizon: False
-num_steps: 10
+num_steps: 1
 num_trials: 30
 visualize: True
 experiment_name: 'allegro_cuboid_turning'
@@ -26,8 +26,8 @@ controllers:
   step_size: 0.1
   momentum: 0.
   use_momentum: False
-  online_iters: 30
-  warmup_iters: 200
+  online_iters: 1
+  warmup_iters: 1
   resample_steps: 1
   resample_sigma: 0.01
   resample_temperature: 0.1

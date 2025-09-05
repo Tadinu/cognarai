@@ -278,7 +278,9 @@ class MFRPlanner(object):
             current_theta = state[:, -obj_dof:].detach().cpu().numpy()
             actual_trajectory.append(start.clone())
             start_time = time.time()
+            print("BEFORE PLANNER STEP")
             best_traj, trajectories = manipulation_planner.step(start)
+            print("AFTER PLANNER STEP")
 
             solve_time = time.time() - start_time
             print(f"solve time: {solve_time}")

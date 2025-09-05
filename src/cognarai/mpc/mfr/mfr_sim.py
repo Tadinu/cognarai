@@ -75,6 +75,7 @@ def main():
                 torch_to_bytes(env.get_dof_state()),
                 torch_to_bytes(env.get_root_state())
             ))
+            #print("Actions", actions)
 
             # apply actions
             env.step(actions)
