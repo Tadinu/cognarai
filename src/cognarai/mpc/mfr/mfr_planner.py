@@ -281,7 +281,7 @@ class MFRPlanner(object):
             best_traj, trajectories = manipulation_planner.step(start)
 
             solve_time = time.time() - start_time
-            print(f"solve time: {solve_time}")
+            print(f"Planner solving time: {solve_time}")
             if k == 0:
                 warmup_time = solve_time
             else:

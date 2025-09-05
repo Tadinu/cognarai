@@ -5,7 +5,8 @@ import zerorpc
 import time
 import random
 
-from mfr_common import DEFAULT_MFR_TASK_NAME
+from mfr_common import DEFAULT_MFR_TASK_NAME, MFR_HEADLESS
+assert MFR_HEADLESS == True
 
 # IsaacApp Launcher
 # -> Must be always created first before importing Omniverse/Issac-related below
@@ -75,8 +76,10 @@ def main():
                 torch_to_bytes(env.get_dof_state()),
                 torch_to_bytes(env.get_root_state())
             ))
+            #print("Actions", actions)
 
             # apply actions
+            actions = torch.zeros((1,16), device=env.device)
             env.step(actions)
 
             # timekeeping

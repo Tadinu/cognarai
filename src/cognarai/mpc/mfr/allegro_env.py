@@ -13,7 +13,7 @@ Isaac Lab API (see docs linked in the chat response for references).
 from __future__ import annotations
 from typing import Tuple, Optional, Sequence
 import os
-import pathlib
+from pathlib import Path
 import math
 import yaml
 
@@ -28,9 +28,10 @@ from isaaclab.utils import configclass
 from isaaclab.utils.math import euler_xyz_from_quat
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import PhysxCfg, SimulationCfg
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, RigidObject, RigidObjectCfg
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab_tasks.direct.inhand_manipulation.inhand_manipulation_env import InHandManipulationEnv
 from isaaclab_tasks.direct.allegro_hand.allegro_hand_env_cfg import AllegroHandEnvCfg
 
@@ -38,6 +39,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR  = f"{CURRENT_DIR}/config"
 MODELS_DIR = f"{CURRENT_DIR}/models"
 ALLEGRO_URDF_DIR = f"{MODELS_DIR}/allegro_xela"
+CUBOID_URDF_DIR = f"{MODELS_DIR}/cuboid_insertion"
 
 # -----------------------------------------------------------------------------
 # Task objects (valve / screwdriver)
@@ -79,6 +81,8 @@ class ScrewdriverObjectCfg(RigidObjectCfg):
 # -----------------------------------------------------------------------------
 # Environment configuration
 # -----------------------------------------------------------------------------
+
+OBJ_INIT_POS = [0, 0, 0.31]
 
 @configclass
 class AllegroManipEnvCfg(AllegroHandEnvCfg):
@@ -182,8 +186,7 @@ class AllegroManipEnvCfg(AllegroHandEnvCfg):
 
     valve_cfg: RigidObjectCfg = ValveObjectCfg()
     screwdriver_cfg: RigidObjectCfg = ScrewdriverObjectCfg()
-    obj_pos: list[float] = [0, 0, 0.31]
-
+    obj_init_pos: list[float] = OBJ_INIT_POS
 # -----------------------------------------------------------------------------
 # Environment (Direct RL Workflow)
 # -----------------------------------------------------------------------------
@@ -211,7 +214,7 @@ class AllegroManipEnv(InHandManipulationEnv):
 
         # World, obj transf
         self.world_trans = tf.Transform3d(pos=cfg.robot_init_pose[0], rot=cfg.robot_init_pose[1], device=self.device)
-        self.object_init_pos = torch.tensor(cfg.obj_pos, device=self.device)
+        self.object_init_pos = torch.tensor(cfg.obj_init_pos, device=self.device)
 
         # Others
         self.finger_names = cfg.fingers
@@ -245,7 +248,19 @@ class AllegroManipEnv(InHandManipulationEnv):
     # ---- Scene construction -------------------------------------------------
 
     def _setup_scene(self):
-        super()._setup_scene()
+        # NOTE: Don't call [super()._setup_scene()] for not spawning its object
+        assert isinstance(self.cfg, AllegroManipEnvCfg)
+
+        # add hand, in-hand object, and goal object
+        self.hand = Articulation(self.cfg.robot_cfg)
+        self._robot = self.hand
+
+        # add ground plane
+        spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
+        # clone and replicate (no need to filter for this environment)
+        self.scene.clone_environments(copy_from_source=False)
+        # add articulation to scene - we must register to scene to randomize with EventManager
+        self.scene.articulations["robot"] = self.hand
 
         # Task object(s)
         if self.cfg.use_valve:
@@ -255,6 +270,10 @@ class AllegroManipEnv(InHandManipulationEnv):
         if self.cfg.use_screwdriver:
             self.screwdriver: RigidObject = RigidObject(self.cfg.screwdriver_cfg)
             self.scene.rigid_objects["screwdriver"] = self.screwdriver
+
+        # add lights
+        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        light_cfg.func("/World/Light", light_cfg)
 
     def get_distance2goal(self):
         state = self.get_state()
@@ -352,26 +371,31 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=0.5, replicate_physics=True)
 
     # cuboid object (placeholder uses an instanceable USD box asset; replace if you have USD export of the URDF)
-    cuboid_cfg: RigidObjectCfg = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/object",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                kinematic_enabled=False,
-                disable_gravity=False,
-                enable_gyroscopic_forces=True,
-                solver_position_iteration_count=8,
-                solver_velocity_iteration_count=0,
-                sleep_threshold=0.005,
-                stabilization_threshold=0.0025,
-                max_depenetration_velocity=1000.0,
+    cuboid_cfg: ArticulationCfg = ArticulationCfg(
+        prim_path = "/World/envs/env_.*/cuboid",
+        spawn = sim_utils.UrdfFileCfg(
+            asset_path=f"{CUBOID_URDF_DIR}/short_cuboid.urdf",
+            fix_base=True,
+            merge_fixed_joints=False,
+            make_instanceable=True,
+            joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+                gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=None, damping=None)
             ),
-            mass_props=sim_utils.MassPropertiesCfg(density=400.0),
-            scale=(1.2, 1.2, 1.2),
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+            )
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0, 0, 0.31), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state = ArticulationCfg.InitialStateCfg(pos=OBJ_INIT_POS, rot=(1.0, 0.0, 0.0, 0.0)),
+        actuators={
+            "joints": ImplicitActuatorCfg(
+                joint_names_expr=[".*"],
+                velocity_limit=100.0,
+                effort_limit=87.0,
+                stiffness=800.0,
+                damping=40.0,
+            ),
+        },
     )
-    object_cfg = cuboid_cfg
 
     # action/observation sizes; action -> 16 allegro joint deltas
     action_space: int = 16
@@ -383,8 +407,8 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
     def __post_init__(self):
         self.robot_cfg.init_state.pos = [-0.1, -0.025, 0.30]
         self.robot_cfg.init_state.rot = [0.258819, 0, 0, 0.9659258]
-        #self.viewer.eye = [0.3, 0.3, 0.48]
-        #self.viewer.look_at = [0.0, 0.0, 0.305]
+        self.viewer.eye = [0.02, 0.02, 1.0]
+        self.viewer.look_at = [0.0, 0.0, 0.35]
 
 # -----------------------------------------------------------------------------
 # Helper: quaternion -> yaw (Z-up convention)
@@ -428,12 +452,25 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
     # ---- Scene building -----------------------------------------------------
 
     def _setup_scene(self):
-        super()._setup_scene()
         assert isinstance(self.cfg, AllegroCuboidTurningCfg)
+        # spawn cuboid first
+        self.cuboid = Articulation(self.cfg.cuboid_cfg)
+        self.object = self.cuboid
+        self.scene.articulations["cuboid"] = self.cuboid
+        super()._setup_scene()
 
-        # spawn cuboid
-        self.cuboid = self.object
-        self.scene.rigid_objects["cuboid"] = self.cuboid
+
+    def spawn_object_from_urdf(self, obj_urdf_path, obj_pos, obj_quat) -> RigidObject:
+        cfg = sim_utils.UrdfFileCfg(
+            asset_path=obj_urdf_path,
+            fix_base=True,
+            joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+                gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=None, damping=None)
+            ),
+        )
+        prim_path = f"/World/envs/env_.*/{Path(obj_urdf_path).stem}"
+        cfg.func(prim_path, cfg, translation=obj_pos, orientation=obj_quat)
+        return RigidObject(RigidObjectCfg(prim_path=prim_path))
 
     def _get_rewards(self) -> torch.Tensor:
         reward = super()._get_rewards()
@@ -501,23 +538,23 @@ def get_task_config(task_name: Optional[str]=None):
     if not task_name:
         task_name = 'cuboid_turning'
     if task_name == 'screwdriver_turning':
-        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_screwdriver.yaml').read_text())
+        config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_screwdriver.yaml').read_text())
         config['obj_dof_code'] = [0, 0, 0, 1, 1, 1]
         config['num_env_force'] = 1
     elif task_name == 'valve_turning':
-        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_valve.yaml').read_text())
+        config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_valve.yaml').read_text())
         config['obj_dof_code'] = [0, 0, 0, 0, 1, 0]
         config['num_env_force'] = 0
     elif task_name == 'cuboid_turning':
-        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_cuboid_turning.yaml').read_text())
+        config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_cuboid_turning.yaml').read_text())
         config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
         config['num_env_force'] = 0
     elif task_name == 'cuboid_alignment':
-        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_cuboid_alignment.yaml').read_text())
+        config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_cuboid_alignment.yaml').read_text())
         config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
         config['num_env_force'] = 1
     elif task_name == 'reorientation':
-        config = yaml.safe_load(pathlib.Path(f'{CONFIG_DIR}/allegro_reorientation.yaml').read_text())
+        config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_reorientation.yaml').read_text())
         config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
         config['num_env_force'] = 0
     else:

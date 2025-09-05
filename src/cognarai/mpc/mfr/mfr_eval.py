@@ -4,8 +4,10 @@ from tqdm import tqdm
 logging.getLogger().setLevel(logging.INFO)
 
 # IsaacApp Launcher
+from cognarai.mpc.mfr.mfr_common import MFR_HEADLESS
+assert MFR_HEADLESS == False
 from cognarai.mpc.mfr.mfr_planner import args, app_launcher
-# !NOTE: All related to Isaac must be imported after [AppLauncher]
+# !NOTE: All Isaac-related packages must be imported after [AppLauncher]
 
 # Cognarai
 from cognarai.isaac_app import IsaacApp
