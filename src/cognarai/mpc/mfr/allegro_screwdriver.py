@@ -13,11 +13,12 @@ import pytorch_kinematics as pk
 import pytorch_kinematics.transforms as tf
 from torch.func import vmap, jacrev, hessian, jacfwd
 
-import matplotlib.pyplot as plt# from utils.allegro_utils import partial_to_full_state, full_to_partial_state, combine_finger_constraints, state2ee_pos, visualize_trajectory, all_finger_constraints
 from allegro_valve_roll import AllegroValveTurning, AllegroContactProblem, PositionControlConstrainedSVGDMPC
 from scipy.spatial.transform import Slerp
 
-from utils.allegro_utils import *
+# cognarai
+from cognarai.mpc.mfr.allegro_env import MODELS_DIR, ALLEGRO_URDF_DIR
+from cognarai.mpc.mfr.utils.allegro_utils import *
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 

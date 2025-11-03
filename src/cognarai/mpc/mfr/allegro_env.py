@@ -18,6 +18,7 @@ import math
 import yaml
 
 # Third-party
+import numpy as np
 import torch
 #import pytorch_kinematics as pk
 import pytorch_kinematics.transforms as tf
@@ -40,7 +41,7 @@ CONFIG_DIR  = f"{CURRENT_DIR}/config"
 MODELS_DIR = f"{CURRENT_DIR}/models"
 ALLEGRO_URDF_DIR = f"{MODELS_DIR}/allegro_xela"
 CUBOID_URDF_DIR = f"{MODELS_DIR}/cuboid_insertion"
-
+SCREWDRIVER_URDF_DIR = f"{MODELS_DIR}/screwdriver"
 # -----------------------------------------------------------------------------
 # Task objects (valve / screwdriver)
 # -----------------------------------------------------------------------------
@@ -410,6 +411,52 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
         self.viewer.eye = [0.02, 0.02, 1.0]
         self.viewer.look_at = [0.0, 0.0, 0.35]
 
+@configclass
+class AllegroScrewdriver6DCfg(AllegroManipEnvCfg):
+    # simulation / scene
+    sim: sim_utils.SimulationCfg = sim_utils.SimulationCfg(dt=1.0/60.0, render_interval=2)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=0.5, replicate_physics=True)
+
+    # screwdriver (placeholder uses an instanceable USD box asset; replace if you have USD export of the URDF)
+    screwdriver6d_cfg: ArticulationCfg = ArticulationCfg(
+        prim_path = "/World/envs/env_.*/screwdriver",
+        spawn = sim_utils.UrdfFileCfg(
+            asset_path=f"{SCREWDRIVER_URDF_DIR}/screwdriver_6d.urdf",
+            fix_base=True,
+            merge_fixed_joints=False,
+            make_instanceable=True,
+            joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+                gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=None, damping=None)
+            ),
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+            )
+        ),
+        init_state = ArticulationCfg.InitialStateCfg(pos=[0, 0, 0.205], rot=(1.0, 0.0, 0.0, 0.0)),
+        actuators={
+            "joints": ImplicitActuatorCfg(
+                joint_names_expr=[".*"],
+                velocity_limit=100.0,
+                effort_limit=87.0,
+                stiffness=800.0,
+                damping=40.0,
+            ),
+        },
+    )
+
+    # action/observation sizes; action -> 16 allegro joint deltas
+    action_space: int = 16
+    observation_space: int = 64
+
+    # default joint initial pose (derived from allegro.py default_dof_pos)
+    default_q: float = 0.0
+
+    def __post_init__(self):
+        self.robot_cfg.init_state.pos = [-0.1, -0.025, 0.30]
+        self.robot_cfg.init_state.rot = [0.258819, 0, 0, 0.9659258]
+        self.viewer.eye = [0.02, 0.02, 1.0]
+        self.viewer.look_at = [0.0, 0.0, 0.35]
+
 # -----------------------------------------------------------------------------
 # Helper: quaternion -> yaw (Z-up convention)
 # -----------------------------------------------------------------------------
@@ -428,6 +475,7 @@ def quat_to_yaw(q: torch.Tensor) -> torch.Tensor:
 
 # -----------------------------------------------------------------------------
 # Environment implementation
+# Original source: https://github.com/UM-ARM-Lab/MFR_benchmark
 # -----------------------------------------------------------------------------
 
 class AllegroCuboidTurningEnv(AllegroManipEnv):
@@ -533,6 +581,49 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
 
         # set per-env target yaw (e.g. random target in [-pi,pi])
         self.target_yaw[env_ids] = (torch.rand(N, device=self.device) - 0.5) * 2 * math.pi
+
+
+class AllegroScrewdriver6DEnv(AllegroManipEnv):
+    "6D screwdriver environment"
+
+    def __init__(self, fingers: list[str] = ['index', 'thumb'], # order matters, please follow index, middle, ring, thumb,
+                 render_mode: Optional[str] = None, **kwargs):
+        cam_pos = [-0.3, 0.4, 0.38]
+        cam_target = [0.0, 0.0, 0.305]
+        p = [0.01, -0.028, 0.31]
+        r = [-0.5, 0.5, 0.5, 0.5]
+        super().__init__(AllegroScrewdriver6DCfg(fingers=fingers), render_mode=render_mode, **kwargs)
+        self.default_dof_pos = torch.cat((torch.tensor([[0., 0.5, 0.7, 0.7]]).float().to(device=self.device),
+                                          torch.tensor([[0., 0.5, 0.7, 0.7]]).float().to(device=self.device),
+                                          torch.tensor([[0., 0.5, 0.7, 0.7]]).float().to(device=self.device),
+                                          torch.tensor([[1.3, 0.3, 0.2, 1.1]]).float().to(device=self.device)),
+                                         dim=1).to(self.device)
+        # add the screwdriver angle to it
+        screwdriver_default_pos = torch.tensor([0, 0, 0, 0, -1.57, 0, 0]).float().to(device=self.device)
+        self.default_dof_pos = torch.cat((self.default_dof_pos, screwdriver_default_pos.unsqueeze(0)),
+                                         dim=1).to(self.device)
+        self.default_dof_pos = self.default_dof_pos.repeat(self.num_envs, 1)
+        self.reset()
+
+    def get_state(self):
+        results = super(AllegroScrewdriver6DEnv, self).get_state()
+        screwdriver_ori_euler = self._q[:, -4:-1]
+        screwdriver_position = self._q[:, -7:-4]
+        results['screwdriver_ori_euler'] = screwdriver_ori_euler
+        results['screwdriver_ori'] = screwdriver_ori_euler
+        results['screwdriver_position'] = screwdriver_position
+        results['screwdriver_angle'] = self._q[:, -1:]
+        # gt_euler = R.from_quat(self.rb_states[-4, 3:7].cpu()).as_euler('XYZ')
+        # print(gt_euler, screwdriver_ori_euler)
+        q = []
+        for finger in self.finger_names:
+            q.append(results[f'{finger}_q'])
+        q.append(results['screwdriver_position'])
+        q.append(results['screwdriver_ori'])
+        q.append(results['screwdriver_angle'])
+        q = torch.cat(q, dim=1)
+        results['q'] = q
+        return results
 
 def get_task_config(task_name: Optional[str]=None):
     if not task_name:

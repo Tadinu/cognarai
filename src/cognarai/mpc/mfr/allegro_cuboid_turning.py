@@ -7,12 +7,13 @@ import pytorch_kinematics.transforms as tf
 from torch.func import vmap, jacrev, hessian, jacfwd
 # import pytorch3d.transforms as tf
 
-from utils.allegro_utils import *
 from allegro_valve_roll import AllegroValveTurning
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
-
+# cognarai
+from cognarai.mpc.mfr.allegro_env import MODELS_DIR, ALLEGRO_URDF_DIR
+from cognarai.mpc.mfr.utils.allegro_utils import *
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 

@@ -19,10 +19,10 @@ import pytorch_kinematics as pk
 import pytorch_kinematics.transforms as tf
 
 import matplotlib.pyplot as plt
-from utils.allegro_utils import *
 
 # cognarai
 from cognarai.mpc.mfr.allegro_env import MODELS_DIR, ALLEGRO_URDF_DIR
+from cognarai.mpc.mfr.utils.allegro_utils import *
 
 CCAI_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -66,7 +66,6 @@ class PositionControlConstrainedSteinTrajOpt(ConstrainedSteinTrajOpt):
         self.fingers = problem.fingers
         self.num_fingers = len(self.fingers)
 
-
     def _clamp_in_bounds(self, xuz):
         N = xuz.shape[0]
         min_x = self.problem.x_min.reshape(1, 1, -1).repeat(1, self.problem.T, 1)
@@ -102,10 +101,12 @@ class PositionControlConstrainedSteinTrajOpt(ConstrainedSteinTrajOpt):
             min_x[:, :, self.problem.dx:self.problem.dx + self.problem.robot_dof] = min_u
             max_x[:, :, self.problem.dx:self.problem.dx + self.problem.robot_dof] = max_u
             torch.clamp_(xuz, min=min_x.reshape((N, -1)), max=max_x.reshape((N, -1)))
+
     def resample(self, xuz):
         xuz = xuz.to(dtype=torch.float32)
         self.problem._preprocess(xuz)
         return super().resample(xuz)
+
 class PositionControlConstrainedSVGDMPC(Constrained_SVGD_MPC):
 
     def __init__(self, problem, params):

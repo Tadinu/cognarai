@@ -6,7 +6,7 @@ import time
 import random
 
 from mfr_common import DEFAULT_MFR_TASK_NAME, MFR_HEADLESS
-assert MFR_HEADLESS == True
+#assert MFR_HEADLESS == True
 
 # IsaacApp Launcher
 # -> Must be always created first before importing Omniverse/Issac-related below

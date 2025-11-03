@@ -267,6 +267,7 @@ class MFRPlanner(object):
         else:
             raise ValueError(f'Unknown task: {task}')
 
+        print("Start planning:", task)
         manipulation_planner = PositionControlConstrainedSVGDMPC(manipulation_problem, params)
         actual_trajectory = []
         duration = 0
