@@ -12,8 +12,9 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
 print("ISAACLAB_NUCLEUS_DIR:", ISAACLAB_NUCLEUS_DIR)
 
+
 class IsaacApp:
-    def __init__(self, app_launcher:AppLauncher,
+    def __init__(self, app_launcher: AppLauncher,
                  sim_cfg: Optional[SimulationCfg] = None,
                  interactive_scene_cfg: Optional[InteractiveSceneCfg] = None,
                  args: Optional[Any] = None):
@@ -44,20 +45,27 @@ class IsaacApp:
     def is_running(self):
         return self._sim_app.is_running()
 
+    def update(self):
+        self._sim_context.step()
+        self._interactive_scene.update(self._sim_context.get_physics_dt())
+
     def run(self):
         self._sim_context.reset()
 
         """Runs the simulation loop."""
         scene = self._interactive_scene
-        rigid_object: RigidObject = scene["object"]
         robot: Articulation = scene["robot"]
         # Define simulation stepping
         sim_dt = self._sim_context.get_physics_dt()
         count = 0
+
+        test = False
+        if test:
+            rigid_object: RigidObject = scene["object"]
         # Simulation loop
         while self._sim_app.is_running():
             # Reset
-            if count % 250 == 0:
+            if test and count % 250 == 0:
                 # reset counter
                 count = 0
                 # reset the scene entities
@@ -79,12 +87,14 @@ class IsaacApp:
                 print("Joint Pos:", joint_pos.shape)
                 print("Joint Vel:", joint_vel.shape)
                 robot.write_joint_state_to_sim(joint_pos, joint_vel)
+
+                # Apply action to robot
+                robot.set_joint_position_target(robot.data.default_joint_pos)
+
                 # clear internal buffers
                 scene.reset()
                 print("[INFO]: Resetting scene state...")
 
-            # Apply action to robot
-            robot.set_joint_position_target(robot.data.default_joint_pos)
             # Write data to sim
             scene.write_data_to_sim()
             # Perform step

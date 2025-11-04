@@ -3,6 +3,7 @@ import os
 import argparse
 import logging
 import time
+
 logging.getLogger().setLevel(logging.INFO)
 
 from mfr_common import DEFAULT_MFR_TASK_NAME, MFR_HEADLESS
@@ -10,27 +11,30 @@ from mfr_common import DEFAULT_MFR_TASK_NAME, MFR_HEADLESS
 # IsaacApp Launcher
 # -> Must be always created first before importing Omniverse/Issac-related below
 from isaaclab.app import AppLauncher
+
 parser = argparse.ArgumentParser(description="MFR Isaac Planner")
 parser.add_argument("--num_envs", type=int, default=32)
 parser.add_argument("--valve", action="store_true")
 parser.add_argument("--screwdriver", action="store_true")
 parser.add_argument('--task', type=str, default=DEFAULT_MFR_TASK_NAME, help='task to evaluate')
-AppLauncher.add_app_launcher_args(parser) # [parser] is updated here with added IsaacLab-specific arguments
+AppLauncher.add_app_launcher_args(parser)  # [parser] is updated here with added IsaacLab-specific arguments
 args = parser.parse_args()
 args.headless = MFR_HEADLESS
 app_launcher = AppLauncher(args)
 
 # !NOTE: All related to Isaac must be imported after [AppLauncher]
 
-#import pytorch_volumetric as pv
+# import pytorch_volumetric as pv
 import pytorch_kinematics as pk
 
 # torch
 import torch
+
 torch.set_printoptions(precision=2, sci_mode=False)
 
 # Cognarai
-from cognarai.mpc.mfr.allegro_valve_roll import AllegroValveTurning, AllegroContactProblem, PositionControlConstrainedSVGDMPC
+from cognarai.mpc.mfr.allegro_valve_roll import AllegroValveTurning, AllegroContactProblem, \
+    PositionControlConstrainedSVGDMPC
 from cognarai.mpc.mfr.allegro_screwdriver import AllegroScrewdriver
 from cognarai.mpc.mfr.allegro_cuboid_turning import AllegroCuboidTurning
 from cognarai.mpc.mfr.allegro_cuboid_alignment_w_force import AllegroCuboidAlignment
@@ -60,34 +64,39 @@ class MFRPlanner(object):
         self.task_config = task_config
 
         # Init
-        self.task_config['goal'] = torch.tensor(self.task_config['goal'], device=self.task_config['device']).float()
+        self.device = self.task_config['device']
+        self.task_config['goal'] = torch.tensor(self.task_config['goal'], device=self.device).float()
         self.env.reset()
-        fpath = pathlib.Path(f'{CURRENT_DIR}/data/experiments/{self.task_config["experiment_name"]}/trial_{self.trial_count + 1}')
-        pathlib.Path.mkdir(fpath, parents=True, exist_ok=True)
-        # set up params
-        params = self.task_config.copy()
-        params.pop('controllers')
-        params.update(self.task_config['controllers'])
-        params['chain'] = self.chain.to(device=params['device'])
-        object_location = self.env.object_init_pos.to(params['device']).float()  # NOTE: this is true for the tasks we have now. We need to pay attention if the root joint is not the root of the asset
-        params['object_location'] = object_location
+        self.fpath = pathlib.Path(
+            f'{CURRENT_DIR}/data/experiments/{self.task_config["experiment_name"]}/trial_{self.trial_count + 1}')
+        pathlib.Path.mkdir(self.fpath, parents=True, exist_ok=True)
+
+        # Params
+        self.params = self.task_config.copy()
 
         # Pregrasp
-        self.pregrasp(params, fpath)
+        self.pregrasp()
 
     def apply_hand_state(self, dof_state_data: bytes, root_state_data: bytes):
         dof_state = bytes_to_torch(dof_state_data)
         size = self.env.hand_dof_pos.shape[0]
-        joint_pos = dof_state[:size,:]
-        joint_vel = dof_state[size:,:]
+        joint_pos = dof_state[:size, :]
+        joint_vel = dof_state[size:, :]
         self.env.hand.write_joint_state_to_sim(joint_pos, joint_vel)
         self.env.hand.write_root_state_to_sim(bytes_to_torch(root_state_data))
 
-    def pregrasp(self, params, fpath):
-        self.params = params
+    def pregrasp(self):
+        # Set up params
+        params = self.params
+        params.pop('controllers')
+        params.update(self.task_config['controllers'])
+        params['chain'] = self.chain.to(device=self.device)
+        # NOTE: this is true for the tasks we have now. We need to pay attention if the root joint is not the root of the asset
+        params['object_location'] = torch.tensor(self.env.cfg.object_cfg.init_state.pos,
+                                                 device=self.device).float()
+
         obj_dof = params['obj_dof']
-        num_fingers = len(params['fingers'])
-        robot_dof = 4 * num_fingers
+        robot_dof = 4 * len(params['fingers'])
         if params['object_type'] == 'screwdriver':
             "only turn the screwdriver once"
             obj_joint_dim = 1  # compensate for the screwdriver cap
@@ -96,7 +105,7 @@ class MFRPlanner(object):
 
         self.env.reset()
         if params['visualize']:
-            self.env.frame_fpath = fpath
+            self.env.frame_fpath = self.fpath
             self.env.frame_id = 0
         else:
             self.env.frame_fpath = None
@@ -106,12 +115,9 @@ class MFRPlanner(object):
         start = state[0].to(device=params['device'])
 
         # setup the pregrasp problem
-        pregrasp_flag = False
         task = params['task']
-        if task == 'cuboid_turning' or task == 'reorientation' or task == 'cuboid_alignment':
-            pregrasp_flag = False
-        else:
-            pregrasp_flag = True
+        # task == 'cuboid_turning' or
+        pregrasp_flag = not (task == 'reorientation' or task == 'cuboid_alignment')
         if pregrasp_flag:
             print("Pregrasping...")
             pregrasp_succ = False
@@ -125,7 +131,8 @@ class MFRPlanner(object):
                     T=4,
                     chain=params['chain'],
                     device=params['device'],
-                    object_asset_pos=self.env.object_pos,
+                    object_asset_pos=torch.zeros(3),
+                    object_urdf_path=self.env.cfg.object_urdf_path,
                     object_type=params['object_type'],
                     world_trans=self.env.world_trans,
                     fingers=params['fingers'],
@@ -133,6 +140,7 @@ class MFRPlanner(object):
                     obj_joint_dim=obj_joint_dim,
                     fixed_obj=True,
                 )
+                self.env.manip_problem = pregrasp_problem
 
                 pregrasp_planner = PositionControlConstrainedSVGDMPC(pregrasp_problem, params)
                 pregrasp_planner.warmup_iters = 50
@@ -155,12 +163,12 @@ class MFRPlanner(object):
                                          pregrasp_problem.fingers, pregrasp_problem.obj_dof + obj_joint_dim,
                                          arm_dof=0)
 
-                for x in best_traj[:, :pregrasp_dx]:
-                    action = x.reshape(-1, pregrasp_dx).to(device=self.env.device)  # move the rest fingers
+                for x in best_traj[:]:
+                    action = x.reshape(-1, x.shape[0]).to(device=self.env.device)  # move the rest fingers
                     self.env.step(action)
                     action_list.append(action)
                 if params['mode'] == 'simulation':
-                    pregrasp_succ = self.env.check_validity(self.env.get_state().cpu()[0])
+                    pregrasp_succ = self.env.manip_problem.check_validity(self.env.get_state().cpu()[0])
                 if pregrasp_succ == False:
                     print("pregrasp failed, replanning")
                     self.env.reset()
@@ -186,7 +194,8 @@ class MFRPlanner(object):
                 T=params['T'],
                 chain=params['chain'],
                 device=params['device'],
-                object_asset_pos=self.env.object_init_pos,
+                object_asset_pos=torch.zeros(3),
+                object_urdf_path=self.env.cfg.object_urdf_path,
                 object_location=params['object_location'],
                 object_type=params['object_type'],
                 friction_coefficient=params['friction_coefficient'],
@@ -206,7 +215,8 @@ class MFRPlanner(object):
                 T=params['T'],
                 chain=params['chain'],
                 device=params['device'],
-                object_asset_pos=self.env.object_init_pos,
+                object_asset_pos=torch.zeros(3),
+                object_urdf_path=self.env.cfg.object_urdf_path,
                 object_location=params['object_location'],
                 object_type=params['object_type'],
                 friction_coefficient=params['friction_coefficient'],
@@ -220,7 +230,8 @@ class MFRPlanner(object):
                 goal=params['goal'],
                 T=params['T'],
                 chain=params['chain'],
-                object_asset_pos=self.env.object_init_pos,
+                object_asset_pos=torch.zeros(3),
+                object_urdf_path=self.env.cfg.object_urdf_path,
                 world_trans=self.env.world_trans,
                 object_location=params['object_location'],
                 object_type=params['object_type'],
@@ -237,7 +248,8 @@ class MFRPlanner(object):
                 T=params['T'],
                 chain=params['chain'],
                 device=params['device'],
-                cuboid_asset_pos=self.env.object_init_pos,
+                object_asset_pos=torch.zeros(3),
+                object_urdf_path=self.env.cfg.object_urdf_path,
                 wall_asset_pos=self.env.wall_pose,
                 wall_dims=self.env.wall_dims,
                 object_location=params['object_location'],
@@ -254,7 +266,8 @@ class MFRPlanner(object):
                 goal=params['goal'],
                 T=params['T'],
                 chain=params['chain'],
-                object_asset_pos=self.env.object_init_pos,
+                object_asset_pos=torch.zeros(3),
+                object_urdf_path=self.env.cfg.object_urdf_path,
                 world_trans=self.env.world_trans,
                 object_location=params['object_location'],
                 object_type=params['object_type'],
@@ -267,6 +280,7 @@ class MFRPlanner(object):
         else:
             raise ValueError(f'Unknown task: {task}')
 
+        print("---------------------------------------------------")
         print("Start planning:", task)
         manipulation_planner = PositionControlConstrainedSVGDMPC(manipulation_problem, params)
         actual_trajectory = []
@@ -317,7 +331,8 @@ class MFRPlanner(object):
                                                                     compute_hess=False, verbose=True)
             print("--------------------------------------")
 
-            action = x[:, manipulation_problem.dx:manipulation_problem.dx + manipulation_problem.du].to(device=self.env.device)
+            action = x[:, manipulation_problem.dx:manipulation_problem.dx + manipulation_problem.du].to(
+                device=self.env.device)
             print("planned force")
             print(action[:, robot_dof:].reshape(num_fingers + params['num_env_force'], 3))
             print("delta action")
@@ -339,6 +354,7 @@ class MFRPlanner(object):
         self.apply_hand_state(dof_state_data, root_state_data)
         return torch_to_bytes(self.plan(step_env=False))
 
+
 def main():
     # Task Config
     task_config = get_task_config(args.task)
@@ -358,5 +374,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

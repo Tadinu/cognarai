@@ -1,10 +1,12 @@
 import argparse
 import logging
 from tqdm import tqdm
+
 logging.getLogger().setLevel(logging.INFO)
 
 # IsaacApp Launcher
 from cognarai.mpc.mfr.mfr_common import MFR_HEADLESS
+
 assert MFR_HEADLESS == False
 from cognarai.mpc.mfr.mfr_planner import args, app_launcher
 # !NOTE: All Isaac-related packages must be imported after [AppLauncher]
@@ -30,12 +32,18 @@ def main():
     app._interactive_scene = env.scene
 
     # Run planning
-    for _ in tqdm(range(task_config['num_trials'])):
-        ret = planner.plan()
-        print("ACTION:", ret)
+    # for _ in tqdm(range(task_config['num_trials'])):
+    while True:
+        if True:
+            act = planner.plan(step_env=True)
+            # if planner.env.is_object_in_contact_with_fingers():
+            # planner.pregrasp()
+            print("ACTION:", act)
+        app.update()
 
     # APP CLOSE
     app.close()
+
 
 if __name__ == "__main__":
     main()

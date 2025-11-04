@@ -20,7 +20,7 @@ import yaml
 # Third-party
 import numpy as np
 import torch
-#import pytorch_kinematics as pk
+# import pytorch_kinematics as pk
 import pytorch_kinematics.transforms as tf
 
 # Isaac Lab
@@ -32,16 +32,19 @@ from isaaclab.sim import PhysxCfg, SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
+from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab_tasks.direct.inhand_manipulation.inhand_manipulation_env import InHandManipulationEnv
 from isaaclab_tasks.direct.allegro_hand.allegro_hand_env_cfg import AllegroHandEnvCfg
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_DIR  = f"{CURRENT_DIR}/config"
+CONFIG_DIR = f"{CURRENT_DIR}/config"
 MODELS_DIR = f"{CURRENT_DIR}/models"
 ALLEGRO_URDF_DIR = f"{MODELS_DIR}/allegro_xela"
 CUBOID_URDF_DIR = f"{MODELS_DIR}/cuboid_insertion"
 SCREWDRIVER_URDF_DIR = f"{MODELS_DIR}/screwdriver"
+
+
 # -----------------------------------------------------------------------------
 # Task objects (valve / screwdriver)
 # -----------------------------------------------------------------------------
@@ -68,54 +71,25 @@ class ValveObjectCfg(RigidObjectCfg):
     # initial state is identity by default; we randomize at reset
 
 
-@configclass
-class ScrewdriverObjectCfg(RigidObjectCfg):
-    """Screwdriver asset (replace USD path to your tool)."""
-
-    prim_path = "/World/envs/env_.*/Task/Screwdriver"
-    spawn = sim_utils.UsdFileCfg(
-        usd_path="/Nucleus/Assets/Tools/screwdriver.usd",  # TODO: set your path
-        scale=(1.0, 1.0, 1.0),
-    )
-
-
 # -----------------------------------------------------------------------------
 # Environment configuration
 # -----------------------------------------------------------------------------
 
 OBJ_INIT_POS = [0, 0, 0.31]
 
+
 @configclass
 class AllegroManipEnvCfg(AllegroHandEnvCfg):
     # Simulation & runtime
-    decimation = 2                    # control at sim_dt * decimation
-    episode_length_s = 10.0           # per-episode horizon (seconds)
+    decimation = 2  # control at sim_dt * decimation
+    episode_length_s = 10.0  # per-episode horizon (seconds)
 
     # Spaces (update if you change obs/action later)
-    action_space = 16                 # Allegro has 16 actuated joints
-    observation_space = 64            # joint pos/vel + object pose/vel, etc.
-    state_space = 0                   # no privileged state by default
+    action_space = 16  # Allegro has 16 actuated joints
+    observation_space = 64  # joint pos/vel + object pose/vel, etc.
+    state_space = 0  # no privileged state by default
 
     # Allegro hand with Xela sensors
-    actuated_joint_names: list[str] = [
-        'allegro_hand_hitosashi_finger_finger_joint_0',
-        'allegro_hand_naka_finger_finger_joint_4',
-        #'allegro_hand_kusuri_finger_finger_joint_8',
-        'allegro_hand_oya_finger_joint_12',
-        'allegro_hand_hitosashi_finger_finger_joint_1',
-        'allegro_hand_hitosashi_finger_finger_joint_2',
-        'allegro_hand_hitosashi_finger_finger_joint_3',
-        'allegro_hand_naka_finger_finger_joint_5',
-        'allegro_hand_naka_finger_finger_joint_6',
-        'allegro_hand_naka_finger_finger_joint_7',
-        #'allegro_hand_kusuri_finger_finger_joint_9',
-        #'allegro_hand_kusuri_finger_finger_joint_10',
-        #'allegro_hand_kusuri_finger_finger_joint_11',
-        'allegro_hand_oya_finger_joint_13',
-        'allegro_hand_oya_finger_joint_14',
-        'allegro_hand_oya_finger_joint_15',
-    ]
-    fingers: list[str] = [] #['index', 'middle', 'thumb'] # 'ring'
     fingertip_body_names: list[str] = [
         "allegro_hand_hitosashi_finger_finger_0_aftc_base_link",
         "allegro_hand_naka_finger_finger_1_aftc_base_link",
@@ -128,6 +102,9 @@ class AllegroManipEnvCfg(AllegroHandEnvCfg):
         'ring': fingertip_body_names[2],
         'thumb': fingertip_body_names[3],
     }
+    # Actuated fingers
+    fingers: list[str] = []  # ['index', 'middle', 'ring', 'thumb']
+    actuated_joint_names: list[str] = []
 
     # Physics stepping
     sim: SimulationCfg = SimulationCfg(
@@ -157,25 +134,41 @@ class AllegroManipEnvCfg(AllegroHandEnvCfg):
         else f"{ALLEGRO_URDF_DIR}/allegro_hand_right_floating_3d.urdf" if arm_type == 'floating_3d' \
         else f"{ALLEGRO_URDF_DIR}/allegro_hand_right_floating_6d.urdf" if arm_type == 'floating_6d' \
         else f"{ALLEGRO_URDF_DIR}/allegro_hand_right.urdf"
-    robot_init_pose: list[list[float]] = [[-0.1, -0.025, 0.30],[0.258819, 0, 0, 0.9659258]]
+    object_urdf_path: str = ""
     robot_cfg: ArticulationCfg = (ALLEGRO_HAND_CFG.
-        replace(prim_path="/World/envs/env_.*/Robot",
-                spawn=sim_utils.UrdfFileCfg(
-                    fix_base=True,
-                    merge_fixed_joints=False,
-                    make_instanceable=True,
-                    asset_path=hand_urdf_path,
-                    articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                        enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
-                    ),
-                    joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-                        gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=None, damping=None)
-                    )),
-                    init_state=ArticulationCfg.InitialStateCfg(
-                        pos=robot_init_pose[0],
-                        rot=robot_init_pose[1],
-                        joint_pos={"^(?!allegro_hand_hitosashi_finger_finger_joint_0).*": 0.28, "allegro_hand_hitosashi_finger_finger_joint_0": 0.28},
-    )))
+                                  replace(prim_path="/World/envs/env_.*/Robot",
+                                          spawn=sim_utils.UrdfFileCfg(
+                                              fix_base=True,
+                                              activate_contact_sensors=True,
+                                              collision_props=sim_utils.CollisionPropertiesCfg(
+                                                  collision_enabled=True,
+                                              ),
+                                              collision_from_visuals=False,
+                                              merge_fixed_joints=False,
+                                              make_instanceable=True,
+                                              asset_path=hand_urdf_path,
+                                              articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                                                  enabled_self_collisions=True, solver_position_iteration_count=4,
+                                                  solver_velocity_iteration_count=0
+                                              ),
+                                              joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+                                                  gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
+                                                      stiffness=None, damping=None)
+                                              )),
+                                          init_state=ArticulationCfg.InitialStateCfg(
+                                              joint_pos={"^(?!allegro_hand_hitosashi_finger_finger_joint_0).*": 0.28,
+                                                         "allegro_hand_hitosashi_finger_finger_joint_0": 0.28},
+                                          )))
+
+    contact_sensor_cfg: ContactSensorCfg = ContactSensorCfg(
+        update_period=0.0,
+        history_length=1,
+        track_pose=True,
+        debug_vis=False,
+        # filter_prim_paths_expr=[f"{robot_cfg.prim_path}/{fingertip}" for fingertip in fingertip_body_names],
+        filter_prim_paths_expr=[robot_cfg.prim_path],
+        force_threshold=1e-3
+    )
 
     # Default joint targets used at reset
     default_q: float = 0.5
@@ -186,8 +179,40 @@ class AllegroManipEnvCfg(AllegroHandEnvCfg):
     use_screwdriver: bool = False
 
     valve_cfg: RigidObjectCfg = ValveObjectCfg()
-    screwdriver_cfg: RigidObjectCfg = ScrewdriverObjectCfg()
-    obj_init_pos: list[float] = OBJ_INIT_POS
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.object_cfg = None
+        # NOTE: Order does not matter here!
+        if 'index' in self.fingers:
+            self.actuated_joint_names += [
+                'allegro_hand_hitosashi_finger_finger_joint_0',
+                'allegro_hand_hitosashi_finger_finger_joint_1',
+                'allegro_hand_hitosashi_finger_finger_joint_2',
+                'allegro_hand_hitosashi_finger_finger_joint_3']
+
+        if 'middle' in self.fingers:
+            self.actuated_joint_names += [
+                'allegro_hand_naka_finger_finger_joint_4',
+                'allegro_hand_naka_finger_finger_joint_5',
+                'allegro_hand_naka_finger_finger_joint_6',
+                'allegro_hand_naka_finger_finger_joint_7']
+
+        if 'ring' in self.fingers:
+            self.actuated_joint_names += [
+                'allegro_hand_kusuri_finger_finger_joint_8',
+                'allegro_hand_kusuri_finger_finger_joint_9',
+                'allegro_hand_kusuri_finger_finger_joint_10',
+                'allegro_hand_kusuri_finger_finger_joint_11']
+
+        if 'thumb' in self.fingers:
+            self.actuated_joint_names += [
+                'allegro_hand_oya_finger_joint_12',
+                'allegro_hand_oya_finger_joint_13',
+                'allegro_hand_oya_finger_joint_14',
+                'allegro_hand_oya_finger_joint_15']
+
+
 # -----------------------------------------------------------------------------
 # Environment (Direct RL Workflow)
 # -----------------------------------------------------------------------------
@@ -207,6 +232,7 @@ class AllegroManipEnv(InHandManipulationEnv):
     - By default: joint position deltas in [-1, 1], scaled to per-joint range.
       Switch to velocity control by changing `_apply_action`.
     """
+
     def __init__(self, cfg: AllegroManipEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -214,8 +240,9 @@ class AllegroManipEnv(InHandManipulationEnv):
         self.manip_cfg = cfg
 
         # World, obj transf
-        self.world_trans = tf.Transform3d(pos=cfg.robot_init_pose[0], rot=cfg.robot_init_pose[1], device=self.device)
-        self.object_init_pos = torch.tensor(cfg.obj_init_pos, device=self.device)
+        self.robot_init_state_cfg = cfg.robot_cfg.init_state
+        self.world_trans = tf.Transform3d(pos=self.robot_init_state_cfg.pos,
+                                          rot=self.robot_init_state_cfg.rot, device=self.device)
 
         # Others
         self.finger_names = cfg.fingers
@@ -249,32 +276,30 @@ class AllegroManipEnv(InHandManipulationEnv):
     # ---- Scene construction -------------------------------------------------
 
     def _setup_scene(self):
-        # NOTE: Don't call [super()._setup_scene()] for not spawning its object
+        # NOTE: Don't call super()'s since it always spawn object from [cfg.object_cfg]
         assert isinstance(self.cfg, AllegroManipEnvCfg)
 
-        # add hand, in-hand object, and goal object
+        # Add hand, in-hand object, and goal object
         self.hand = Articulation(self.cfg.robot_cfg)
         self._robot = self.hand
 
-        # add ground plane
+        # Add ground plane
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         # clone and replicate (no need to filter for this environment)
         self.scene.clone_environments(copy_from_source=False)
+
         # add articulation to scene - we must register to scene to randomize with EventManager
         self.scene.articulations["robot"] = self.hand
-
-        # Task object(s)
-        if self.cfg.use_valve:
-            self.valve: RigidObject = RigidObject(self.cfg.valve_cfg)
-            self.scene.rigid_objects["valve"] = self.valve
-
-        if self.cfg.use_screwdriver:
-            self.screwdriver: RigidObject = RigidObject(self.cfg.screwdriver_cfg)
-            self.scene.rigid_objects["screwdriver"] = self.screwdriver
 
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
+
+        # contact sensor
+        self.contact_sensor = ContactSensor(self.cfg.contact_sensor_cfg)
+        # if not self.contact_sensor.is_initialized:
+        #    self.contact_sensor._initialize_impl()
+        #    self.contact_sensor._is_initialized = True
 
     def get_distance2goal(self):
         state = self.get_state()
@@ -314,6 +339,10 @@ class AllegroManipEnv(InHandManipulationEnv):
         results = {**finger_q, **finger_ee_pos, **arm_q}
         return results
 
+    def is_object_in_contact_with_fingers(self) -> bool:
+        forces = self.contact_sensor.data.net_forces_w
+        return forces is not None and forces.abs().sum() > 1e-3
+
     # ---- Reset logic --------------------------------------------------------
 
     def _reset_idx(self, env_ids: torch.Tensor) -> None:
@@ -339,7 +368,7 @@ class AllegroManipEnv(InHandManipulationEnv):
                 torch.zeros((env_ids.numel(), 3), device=self.device),
                 env_ids=env_ids,
             )
-        if self.cfg.use_screwdriver:
+        elif self.cfg.use_screwdriver:
             pos, quat = _rand_pose(env_ids.numel())
             self.screwdriver.write_root_pose_to_sim(pos, quat, env_ids=env_ids)
             self.screwdriver.write_root_velocity_to_sim(
@@ -347,6 +376,7 @@ class AllegroManipEnv(InHandManipulationEnv):
                 torch.zeros((env_ids.numel(), 3), device=self.device),
                 env_ids=env_ids,
             )
+
 
 # -----------------------------------------------------------------------------
 # Cuboid Turning environment config
@@ -365,18 +395,25 @@ gravity=config['gravity'],
 gradual_control=config['gradual_control'],
 """
 
+
 @configclass
 class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
     # simulation / scene
-    sim: sim_utils.SimulationCfg = sim_utils.SimulationCfg(dt=1.0/60.0, render_interval=2)
+    sim: sim_utils.SimulationCfg = sim_utils.SimulationCfg(dt=1.0 / 60.0, render_interval=2)
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=0.5, replicate_physics=True)
 
-    # cuboid object (placeholder uses an instanceable USD box asset; replace if you have USD export of the URDF)
+    # cuboid (placeholder uses an instanceable USD box asset; replace if you have USD export of the URDF)
+    # NOTE: Cuboid is an Articulation, not a RigidBody
+    object_urdf_path: str = f"{CUBOID_URDF_DIR}/short_cuboid.urdf"
     cuboid_cfg: ArticulationCfg = ArticulationCfg(
-        prim_path = "/World/envs/env_.*/cuboid",
-        spawn = sim_utils.UrdfFileCfg(
-            asset_path=f"{CUBOID_URDF_DIR}/short_cuboid.urdf",
+        prim_path=f"/World/envs/env_.*/{Path(object_urdf_path).stem}",
+        spawn=sim_utils.UrdfFileCfg(
+            asset_path=object_urdf_path,
             fix_base=True,
+            collision_props=sim_utils.CollisionPropertiesCfg(
+                collision_enabled=True,
+            ),
+            activate_contact_sensors=True,
             merge_fixed_joints=False,
             make_instanceable=True,
             joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
@@ -386,7 +423,7 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
                 enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
             )
         ),
-        init_state = ArticulationCfg.InitialStateCfg(pos=OBJ_INIT_POS, rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=OBJ_INIT_POS, rot=(1.0, 0.0, 0.0, 0.0)),
         actuators={
             "joints": ImplicitActuatorCfg(
                 joint_names_expr=[".*"],
@@ -395,7 +432,13 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
                 stiffness=800.0,
                 damping=40.0,
             ),
-        },
+        }
+    )
+
+    # Contact with fingers
+    cuboid_body_name: str = "cuboid"
+    contact_sensor_cfg: ContactSensorCfg = AllegroManipEnvCfg().contact_sensor_cfg.replace(
+        prim_path=f"{cuboid_cfg.prim_path}/{cuboid_body_name}"
     )
 
     # action/observation sizes; action -> 16 allegro joint deltas
@@ -406,21 +449,25 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
     default_q: float = 0.0
 
     def __post_init__(self):
-        self.robot_cfg.init_state.pos = [-0.1, -0.025, 0.30]
-        self.robot_cfg.init_state.rot = [0.258819, 0, 0, 0.9659258]
-        self.viewer.eye = [0.02, 0.02, 1.0]
-        self.viewer.look_at = [0.0, 0.0, 0.35]
+        super().__post_init__()
+        self.object_cfg = self.cuboid_cfg
+        robot_init_state_cfg = self.robot_cfg.init_state
+        robot_init_state_cfg.pos = [-0.1, 0.0, 0.30]
+        robot_init_state_cfg.rot = [1, 0, 0, 0]
+        self.viewer.eye = [0.3, -0.3, 1.1]
+        self.viewer.look_at = [0.0, 0.0, 0.31]
+
 
 @configclass
 class AllegroScrewdriver6DCfg(AllegroManipEnvCfg):
     # simulation / scene
-    sim: sim_utils.SimulationCfg = sim_utils.SimulationCfg(dt=1.0/60.0, render_interval=2)
+    sim: sim_utils.SimulationCfg = sim_utils.SimulationCfg(dt=1.0 / 60.0, render_interval=2)
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=0.5, replicate_physics=True)
 
     # screwdriver (placeholder uses an instanceable USD box asset; replace if you have USD export of the URDF)
     screwdriver6d_cfg: ArticulationCfg = ArticulationCfg(
-        prim_path = "/World/envs/env_.*/screwdriver",
-        spawn = sim_utils.UrdfFileCfg(
+        prim_path="/World/envs/env_.*/screwdriver",
+        spawn=sim_utils.UrdfFileCfg(
             asset_path=f"{SCREWDRIVER_URDF_DIR}/screwdriver_6d.urdf",
             fix_base=True,
             merge_fixed_joints=False,
@@ -432,7 +479,7 @@ class AllegroScrewdriver6DCfg(AllegroManipEnvCfg):
                 enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
             )
         ),
-        init_state = ArticulationCfg.InitialStateCfg(pos=[0, 0, 0.205], rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=[0, 0, 0.205], rot=(1.0, 0.0, 0.0, 0.0)),
         actuators={
             "joints": ImplicitActuatorCfg(
                 joint_names_expr=[".*"],
@@ -452,10 +499,14 @@ class AllegroScrewdriver6DCfg(AllegroManipEnvCfg):
     default_q: float = 0.0
 
     def __post_init__(self):
-        self.robot_cfg.init_state.pos = [-0.1, -0.025, 0.30]
-        self.robot_cfg.init_state.rot = [0.258819, 0, 0, 0.9659258]
+        super().__post_init__()
+        self.object_cfg = self.screwdriver6d_cfg
+        robot_init_state_cfg = self.robot_cfg.init_state
+        robot_init_state_cfg.pos = [-0.1, 0.025, 0.30]
+        robot_init_state_cfg.rot = [1, 0, 0, 0]
         self.viewer.eye = [0.02, 0.02, 1.0]
         self.viewer.look_at = [0.0, 0.0, 0.35]
+
 
 # -----------------------------------------------------------------------------
 # Helper: quaternion -> yaw (Z-up convention)
@@ -489,7 +540,7 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
                                           torch.tensor([[-0.15, 0.9, 1.0, 0.9]]).float(),
                                           torch.tensor([[0, 0.3, 0.3, 0.6]]).float(),
                                           torch.tensor([[0.7, 1.0, 0.6, 1.05]]).float()),
-                                          dim=1).to(self.device)
+                                         dim=1).to(self.device)
 
         # add the screwdriver angle to it
         self.default_dof_pos = torch.cat(
@@ -497,18 +548,19 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
             dim=1)
         self.default_dof_pos = self.default_dof_pos.repeat(self.num_envs, 1)
         self.reset()
+
     # ---- Scene building -----------------------------------------------------
 
     def _setup_scene(self):
         assert isinstance(self.cfg, AllegroCuboidTurningCfg)
-        # spawn cuboid first
+        super()._setup_scene()
+
+        # cuboid articulation
         self.cuboid = Articulation(self.cfg.cuboid_cfg)
         self.object = self.cuboid
         self.scene.articulations["cuboid"] = self.cuboid
-        super()._setup_scene()
 
-
-    def spawn_object_from_urdf(self, obj_urdf_path, obj_pos, obj_quat) -> RigidObject:
+    def spawn_entity_from_urdf(self, obj_urdf_path, obj_pos, obj_quat) -> RigidObject:
         cfg = sim_utils.UrdfFileCfg(
             asset_path=obj_urdf_path,
             fix_base=True,
@@ -549,7 +601,8 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
         results = super().get_state()
         results['cuboid_pos'] = self.cuboid.data.root_pos_w - self.scene.env_origins
         angles = euler_xyz_from_quat(self.object.data.root_quat_w)
-        results['cuboid_quat'] = torch.tensor([angles[0], angles[1], angles[2]], device=self.device).reshape(1, len(angles))
+        results['cuboid_quat'] = torch.tensor([angles[0], angles[1], angles[2]], device=self.device).reshape(1,
+                                                                                                             len(angles))
         q = []
         for finger in self.finger_names:
             q.append(results[f'{finger}_q'])
@@ -586,7 +639,8 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
 class AllegroScrewdriver6DEnv(AllegroManipEnv):
     "6D screwdriver environment"
 
-    def __init__(self, fingers: list[str] = ['index', 'thumb'], # order matters, please follow index, middle, ring, thumb,
+    def __init__(self, fingers: list[str],
+                 # order matters, please follow index, middle, ring, thumb,
                  render_mode: Optional[str] = None, **kwargs):
         cam_pos = [-0.3, 0.4, 0.38]
         cam_target = [0.0, 0.0, 0.305]
@@ -625,7 +679,17 @@ class AllegroScrewdriver6DEnv(AllegroManipEnv):
         results['q'] = q
         return results
 
-def get_task_config(task_name: Optional[str]=None):
+    def _setup_scene(self):
+        assert isinstance(self.cfg, AllegroScrewdriver6DCfg)
+        super()._setup_scene()
+
+        # screwdriver articulation
+        self.screw_driver = Articulation(self.cfg.screwdriver6d_cfg)
+        self.object = self.screw_driver
+        self.scene.articulations["screw_driver"] = self.screw_driver
+
+
+def get_task_config(task_name: Optional[str] = None):
     if not task_name:
         task_name = 'cuboid_turning'
     if task_name == 'screwdriver_turning':
@@ -656,7 +720,8 @@ def get_task_config(task_name: Optional[str]=None):
     config['task'] = task_name
     return config
 
-def get_env(task, task_config) -> AllegroManipEnv:
+
+def get_env(task: str, task_config: dict) -> AllegroManipEnv:
     if task == 'screwdriver_turning':
         """
         return AllegroScrewdriverTurningEnv(num_envs=num_envs,
@@ -700,6 +765,7 @@ def get_env(task, task_config) -> AllegroManipEnv:
         """
     return None
 
+
 # -----------------------------------------------------------------------------
 # Standalone test
 # -----------------------------------------------------------------------------
@@ -709,6 +775,7 @@ if __name__ == "__main__":
     from isaaclab.app import AppLauncher
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--task", type=str, action="store_true")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--num_envs", type=int, default=32)
     parser.add_argument("--valve", action="store_true")
@@ -720,14 +787,12 @@ if __name__ == "__main__":
     app = AppLauncher(headless=args.headless).app
 
     # Build config
-    cfg = AllegroManipEnvCfg()
+    cfg = AllegroScrewdriver6DCfg() if args.screwdriver else AllegroCuboidTurningCfg()
     cfg.scene.num_envs = args.num_envs
-    if args.screwdriver:
-        cfg.use_valve = False
-        cfg.use_screwdriver = True
 
     # Create env
-    env = AllegroManipEnv(cfg)
+    env = get_env('screwdriver_turning' if args.screwdriver else 'cuboid_turning',
+                  task_config=get_task_config(args.task))
 
     # Rollout a few steps
     for _ in range(500):

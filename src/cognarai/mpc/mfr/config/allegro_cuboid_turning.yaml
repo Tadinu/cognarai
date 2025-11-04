@@ -1,16 +1,16 @@
 ---
-T: 1
+T: 10
 receding_horizon: False
-num_steps: 1
+num_steps: 10
 num_trials: 30
 visualize: True
 experiment_name: 'allegro_cuboid_turning'
 task: 'cuboid_turning'
 mode: 'simulation'  # choose from 'simulation', 'hardware', 'hardware_copy'
 simulator: "isaac_sim" # choose from 'isaac_sim', 'isaac_gym'
-fingers: ['index', 'middle', 'thumb'] #'ring'
+fingers: ['index', 'middle', 'thumb']# , 'ring'
 object_type: 'short_cuboid'
-sim_device: 'cuda:0'
+sim_device: 'cpu'
 device: 'cuda:0'
 friction_coefficient: 0.95
 kp: 6.0 # kp is increased to compenstate for gravity
