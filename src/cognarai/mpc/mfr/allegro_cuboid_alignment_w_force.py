@@ -57,8 +57,8 @@ class AllegroCuboidAlignment(AllegroValveTurning):
                  object_location,
                  object_type,
                  world_trans,
-                 cuboid_asset_pos,
-                 object_urdf_path,
+                 object_asset_pos: torch.Tensor,
+                 object_urdf_path: str,
                  wall_asset_pos,
                  wall_dims,
                  fingers=['index', 'middle', 'ring', 'thumb'],
@@ -71,13 +71,13 @@ class AllegroCuboidAlignment(AllegroValveTurning):
                  device='cuda:0', **kwargs):
         self.fingers = fingers
         self.num_fingers = len(fingers)
-        self.cuboid_asset_pos = cuboid_asset_pos
-        self.cuboid_trans = tf.Transform3d(pos=torch.tensor(self.cuboid_asset_pos, device=device).float(),
+        self.object_asset_pos = object_asset_pos
+        self.cuboid_trans = tf.Transform3d(pos=self.object_asset_pos.float().to(device=device),
                                            rot=torch.tensor(
                                                [1, 0, 0, 0],
                                                device=device).float(), device=device)
         self.wall_asset_pos = wall_asset_pos
-        self.wall_dims = wall_dims.astype('float32')
+        self.wall_dims = wall_dims
         self.arm_dof = 0
         robot_dof = self.arm_dof + 4 * self.num_fingers
         du = robot_dof + 3 * self.num_fingers + 3
@@ -87,7 +87,7 @@ class AllegroCuboidAlignment(AllegroValveTurning):
         super().__init__(start=start, goal=goal, T=T, chain=chain,
                          object_location=object_location,
                          object_type=object_type, world_trans=world_trans,
-                         object_asset_pos=cuboid_asset_pos,
+                         object_asset_pos=object_asset_pos,
                          object_urdf_path=object_urdf_path,
                          fingers=fingers, friction_coefficient=friction_coefficient,
                          obj_dof_code=obj_dof_code,
@@ -116,11 +116,11 @@ class AllegroCuboidAlignment(AllegroValveTurning):
         cuboid_chain = cuboid_chain.to(device=self.device)
         cuboid_sdf = pv.RobotSDF(cuboid_chain, path_prefix=None,
                                  use_collision_geometry=True)  # since we are using primitive shapes for the object, there's no need to define path for stl
-        robot_sdf = pv.RobotSDF(self.chain, path_prefix=get_assets_dir() + '/xela_models', use_collision_geometry=True)
+        robot_sdf = pv.RobotSDF(self.chain, path_prefix=ALLEGRO_URDF_DIR, use_collision_geometry=True)
 
         robot2cuboid = self.world_trans.inverse().compose(
-            pk.Transform3d(device=self.device).translate(self.cuboid_asset_pos[0], self.cuboid_asset_pos[1],
-                                                         self.cuboid_asset_pos[2]))
+            pk.Transform3d(device=self.device).translate(self.object_asset_pos[0], self.object_asset_pos[1],
+                                                         self.object_asset_pos[2]))
 
         # contact checking
         collision_check_links = [self.collision_checking_ee_names[finger] for finger in self.fingers]
@@ -128,22 +128,20 @@ class AllegroCuboidAlignment(AllegroValveTurning):
                                                  collision_check_links=collision_check_links,
                                                  softmin_temp=1.0e3,
                                                  points_per_link=1000,
-                                                 partial_patch=False,
-                                                 )
+                                                 partial_patch=False)
         viz_cuboid_sdf = pv.RobotSDF(cuboid_chain, path_prefix=None,
                                      use_collision_geometry=False)  # since we are using primitive shapes for the object, there's no need to define path for stl
-        viz_robot_sdf = pv.RobotSDF(self.chain, path_prefix=get_assets_dir() + '/xela_models',
+        viz_robot_sdf = pv.RobotSDF(self.chain, path_prefix=ALLEGRO_URDF_DIR,
                                     use_collision_geometry=False)
 
         self.viz_contact_scenes = pv.RobotScene(viz_robot_sdf, viz_cuboid_sdf, robot2cuboid,
                                                 collision_check_links=collision_check_links,
                                                 softmin_temp=1.0e3,
                                                 points_per_link=1000,
-                                                partial_patch=False,
-                                                )
+                                                partial_patch=False)
         # cuboid and wall
         wall_sdf = pv.BoxSDF([self.wall_dims[0], self.wall_dims[1], self.wall_dims[2]], device=self.device)
-        world2cuboid = tf.Transform3d(pos=torch.tensor(self.cuboid_asset_pos, device=self.device).float(),
+        world2cuboid = tf.Transform3d(pos=self.object_asset_pos.float().to(device=self.device),
                                       rot=torch.tensor(
                                           [1, 0, 0, 0],
                                           device=self.device).float(), device=self.device)
@@ -154,8 +152,7 @@ class AllegroCuboidAlignment(AllegroValveTurning):
                                                 collision_check_links=['cuboid'],
                                                 softmin_temp=1.0e3,
                                                 points_per_link=2000,
-                                                partial_patch=False,
-                                                )
+                                                partial_patch=False)
 
         # robot and wall
         if self.collision_checking:
@@ -166,8 +163,7 @@ class AllegroCuboidAlignment(AllegroValveTurning):
                                                    collision_check_links=['allegro_hand_oya_finger_link_15'],
                                                    softmin_temp=1.0e3,
                                                    points_per_link=2000,
-                                                   partial_patch=False,
-                                                   )
+                                                   partial_patch=False)
 
     def _preprocess(self, xu):
         N = xu.shape[0]

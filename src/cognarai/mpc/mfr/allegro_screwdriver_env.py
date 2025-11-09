@@ -118,8 +118,9 @@ class AllegroScrewdriverCfg(AllegroManipEnvCfg):
 # -----------------------------------------------------------------------------
 
 class AllegroScrewdriverEnv(AllegroManipEnv):
-    def __init__(self, fingers: list[str], render_mode: Optional[str] = None, **kwargs):
-        super().__init__(AllegroScrewdriverCfg(fingers=fingers), render_mode=render_mode, **kwargs)
+    def __init__(self, task_cfg: dict, render_mode: Optional[str] = None, **kwargs):
+        super().__init__(task_cfg=task_cfg,
+                         cfg=AllegroScrewdriverCfg(fingers=task_cfg['fingers']), render_mode=render_mode, **kwargs)
 
         # target yaw we want to achieve (per-env) — the task: rotate screwdriver to this yaw
         self.target_yaw = torch.zeros((self.scene.num_envs,), device=self.device)

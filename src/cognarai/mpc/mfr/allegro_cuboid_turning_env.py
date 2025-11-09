@@ -1,9 +1,8 @@
 from __future__ import annotations
-from typing import Tuple, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 import os
 from pathlib import Path
 import math
-import yaml
 
 # Third-party
 import torch
@@ -16,21 +15,27 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+
+ISAACLAB_ASSET_FACTORY_DIR = f"{ISAACLAB_NUCLEUS_DIR}/Factory"
 
 # cognarai
 from cognarai.mpc.mfr.allegro_env import AllegroManipEnv, AllegroManipEnvCfg
+from cognarai.mpc.mfr.mfr_spherical_6d_joint import mfr_add_free_joint
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_DIR = f"{CURRENT_DIR}/config"
 MODELS_DIR = f"{CURRENT_DIR}/models"
 ALLEGRO_URDF_DIR = f"{MODELS_DIR}/allegro_xela"
 CUBOID_URDF_DIR = f"{MODELS_DIR}/cuboid_insertion"
+CUBOID_USD_DIR = f"{CUBOID_URDF_DIR}/short_cuboid_usd"
 
 # -----------------------------------------------------------------------------
 # Environment configuration
 # -----------------------------------------------------------------------------
 
-OBJ_INIT_POS = [0, 0, 0.31]
+CUBOID_INIT_POS = [0, 0, 0.31]
+CUBOID_INIT_QUAT = [1.0, 0.0, 0.0, 0.0]
 
 # -----------------------------------------------------------------------------
 # Cuboid Turning environment config
@@ -56,43 +61,67 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
     sim: sim_utils.SimulationCfg = sim_utils.SimulationCfg(dt=1.0 / 60.0, render_interval=2)
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=0.5, replicate_physics=True)
 
-    # cuboid (placeholder uses an instanceable USD box asset; replace if you have USD export of the URDF)
-    # NOTE: Cuboid is an Articulation, not a RigidBody
+    # URDF is required for Pytorch-kinematics
     object_urdf_path: str = f"{CUBOID_URDF_DIR}/short_cuboid.urdf"
-    cuboid_cfg: ArticulationCfg = ArticulationCfg(
-        prim_path=f"/World/envs/env_.*/{Path(object_urdf_path).stem}",
-        spawn=sim_utils.UrdfFileCfg(
-            asset_path=object_urdf_path,
-            fix_base=True,
+
+    # NOTE: Cuboid is either an Articulation (from URDF), or a RigidObject (from USD)
+    use_cuboid_usd: bool = True
+    cuboid_usd_path: str = f"{CUBOID_USD_DIR}/short_cuboid.usd"
+    cuboid_body_name: str = "cuboid"
+    cuboid_cfg: Union[ArticulationCfg, RigidObjectCfg] = ArticulationCfg(
+        prim_path=f"/World/envs/env_.*/{Path(cuboid_usd_path).stem}",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=cuboid_usd_path,
+            activate_contact_sensors=True,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=True,
+                kinematic_enabled=False,
+                retain_accelerations=True,
+                max_depenetration_velocity=5.0,
+                linear_damping=0.0,
+                angular_damping=0.0,
+                max_linear_velocity=1000.0,
+                max_angular_velocity=3666.0,
+                enable_gyroscopic_forces=True,
+                solver_position_iteration_count=192,
+                solver_velocity_iteration_count=1,
+                max_contact_impulse=1e32,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.05),
+            collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0),
+        ),
+        init_state=ArticulationCfg.InitialStateCfg(pos=CUBOID_INIT_POS, rot=CUBOID_INIT_QUAT),
+        actuators={},
+    ) if use_cuboid_usd else RigidObjectCfg(
+        prim_path=f"/World/envs/env_.*/{Path(cuboid_usd_path).stem}",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.05, 0.05, 0.15),
+            activate_contact_sensors=True,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=True,
+                max_depenetration_velocity=5.0,
+                linear_damping=0.0,
+                angular_damping=0.0,
+                max_linear_velocity=1000.0,
+                max_angular_velocity=3666.0,
+                enable_gyroscopic_forces=True,
+                solver_position_iteration_count=192,
+                solver_velocity_iteration_count=1,
+                max_contact_impulse=1e32,
+            ),
             collision_props=sim_utils.CollisionPropertiesCfg(
                 collision_enabled=True,
             ),
-            activate_contact_sensors=True,
-            merge_fixed_joints=False,
-            make_instanceable=True,
-            joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-                gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=None, damping=None)
-            ),
-            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
-            )
+            mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
+            physics_material=sim_utils.RigidBodyMaterialCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.0, 0.0)),
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=OBJ_INIT_POS, rot=(1.0, 0.0, 0.0, 0.0)),
-        actuators={
-            "joints": ImplicitActuatorCfg(
-                joint_names_expr=[".*"],
-                velocity_limit=100.0,
-                effort_limit=87.0,
-                stiffness=800.0,
-                damping=40.0,
-            ),
-        }
+        init_state=ArticulationCfg.InitialStateCfg(pos=CUBOID_INIT_POS, rot=CUBOID_INIT_QUAT),
     )
 
-    # Contact with fingers
-    cuboid_body_name: str = "cuboid"
+    # Contact sensor
     contact_sensor_cfg: ContactSensorCfg = AllegroManipEnvCfg().contact_sensor_cfg.replace(
-        prim_path=f"{cuboid_cfg.prim_path}/{cuboid_body_name}"
+        prim_path=f"{cuboid_cfg.prim_path}/{cuboid_body_name}" if use_cuboid_usd else cuboid_cfg.prim_path
     )
 
     # action/observation sizes; action -> 16 allegro joint deltas
@@ -118,8 +147,9 @@ class AllegroCuboidTurningCfg(AllegroManipEnvCfg):
 # -----------------------------------------------------------------------------
 
 class AllegroCuboidTurningEnv(AllegroManipEnv):
-    def __init__(self, fingers: list[str], render_mode: Optional[str] = None, **kwargs):
-        super().__init__(AllegroCuboidTurningCfg(fingers=fingers), render_mode=render_mode, **kwargs)
+    def __init__(self, task_cfg: dict, render_mode: Optional[str] = None, **kwargs):
+        super().__init__(task_cfg=task_cfg,
+                         cfg=AllegroCuboidTurningCfg(fingers=task_cfg['fingers']), render_mode=render_mode, **kwargs)
 
         # target yaw we want to achieve (per-env) — the task: rotate cuboid to this yaw
         self.target_yaw = torch.zeros((self.scene.num_envs,), device=self.device)
@@ -143,10 +173,21 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
         assert isinstance(self.cfg, AllegroCuboidTurningCfg)
         super()._setup_scene()
 
-        # cuboid articulation
-        self.cuboid = Articulation(self.cfg.cuboid_cfg)
+        # Cuboid
+        if isinstance(self.cfg.cuboid_cfg, ArticulationCfg):
+            self.cuboid = Articulation(self.cfg.cuboid_cfg)
+            self.scene.articulations["cuboid"] = self.cuboid
+        else:
+            self.cuboid = RigidObject(self.cfg.cuboid_cfg)
+            self.scene.rigid_objects["cuboid"] = self.cuboid
         self.object = self.cuboid
-        self.scene.articulations["cuboid"] = self.cuboid
+
+        # Add free joint
+        # NOTE: [self.cfg.cuboid_cfg.prim_path] has '*', which does not evaluate by Sdf.Path
+        mfr_add_free_joint(prim_path="/World/envs/env_0/short_cuboid",
+                           stage=self.scene.stage,
+                           base_body_name=self.cfg.cuboid_body_name,
+                           prim_pos=self.cfg.cuboid_cfg.init_state.pos)
 
     def spawn_entity_from_urdf(self, obj_urdf_path, obj_pos, obj_quat) -> RigidObject:
         cfg = sim_utils.UrdfFileCfg(
@@ -185,19 +226,18 @@ class AllegroCuboidTurningEnv(AllegroManipEnv):
         reward -= 0.01 * torch.linalg.norm(self.hand_dof_vel)
         return reward
 
-    def get_state(self):
+    def get_state(self) -> dict[str, Any]:
         results = super().get_state()
-        results['cuboid_pos'] = self.cuboid.data.root_pos_w - self.scene.env_origins
-        angles = euler_xyz_from_quat(self.object.data.root_quat_w)
-        results['cuboid_quat'] = torch.tensor([angles[0], angles[1], angles[2]], device=self.device).reshape(1,
-                                                                                                             len(angles))
+        cuboid_pos = self.cuboid.data.root_link_pos_w - self.scene.env_origins
+        angles = euler_xyz_from_quat(self.cuboid.data.root_link_quat_w)
+        cuboid_rot = torch.tensor([angles[0], angles[1], angles[2]], device=self.device).reshape(1, len(angles))
+        # print(cuboid_pos, cuboid_rot)
         q = []
         for finger in self.finger_names:
             q.append(results[f'{finger}_q'])
-        q.append(results['cuboid_pos'])
-        q.append(results['cuboid_quat'])
+        q.append(cuboid_pos)
+        q.append(cuboid_rot)
         q = torch.cat(q, dim=1)
-        results['q'] = q
         return q
 
     def _reset_idx(self, env_ids: Sequence[int] | None) -> None:

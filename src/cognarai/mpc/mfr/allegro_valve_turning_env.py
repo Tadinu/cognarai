@@ -57,7 +57,8 @@ class ValveObjectCfg(RigidObjectCfg):
 # Environment configuration
 # -----------------------------------------------------------------------------
 
-OBJ_INIT_POS = [0, 0, 0.31]
+VALVE_INIT_POS = [0.25, 0., 0.31]
+VALVE_INIT_QUAT = [0.71, 0.0, 0.0, -0.71]
 
 # -----------------------------------------------------------------------------
 # Valve Turning environment config
@@ -104,7 +105,7 @@ class AllegroValveTurningCfg(AllegroManipEnvCfg):
                 enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
             )
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=OBJ_INIT_POS, rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=VALVE_INIT_POS, rot=VALVE_INIT_QUAT),
         actuators={
             "joints": ImplicitActuatorCfg(
                 joint_names_expr=[".*"],
@@ -145,8 +146,9 @@ class AllegroValveTurningCfg(AllegroManipEnvCfg):
 # -----------------------------------------------------------------------------
 
 class AllegroValveTurningEnv(AllegroManipEnv):
-    def __init__(self, fingers: list[str], render_mode: Optional[str] = None, **kwargs):
-        super().__init__(AllegroValveTurningCfg(fingers=fingers), render_mode=render_mode, **kwargs)
+    def __init__(self, task_cfg: dict, render_mode: Optional[str] = None, **kwargs):
+        super().__init__(task_cfg=task_cfg,
+                         cfg=AllegroValveTurningCfg(fingers=task_cfg['fingers']), render_mode=render_mode, **kwargs)
 
         # target yaw we want to achieve (per-env) — the task: rotate valve to this yaw
         self.target_yaw = torch.zeros((self.scene.num_envs,), device=self.device)
@@ -214,15 +216,17 @@ class AllegroValveTurningEnv(AllegroManipEnv):
 
     def get_state(self):
         results = super().get_state()
-        results['valve_pos'] = self.valve.data.root_pos_w - self.scene.env_origins
+        valve_pos = self.valve.data.root_pos_w - self.scene.env_origins
         angles = euler_xyz_from_quat(self.object.data.root_quat_w)
-        results['valve_quat'] = torch.tensor([angles[0], angles[1], angles[2]], device=self.device).reshape(1,
-                                                                                                            len(angles))
+        valve_rot = torch.tensor([angles[0], angles[1], angles[2]], device=self.device).reshape(1,
+                                                                                                len(angles))
         q = []
         for finger in self.finger_names:
             q.append(results[f'{finger}_q'])
-        q.append(results['valve_pos'])
-        q.append(results['valve_quat'])
+
+        # obj_dof_code = self.task_cfg['obj_dof_code']
+        q.append(valve_pos)
+        q.append(valve_rot)
         q = torch.cat(q, dim=1)
         results['q'] = q
         return q

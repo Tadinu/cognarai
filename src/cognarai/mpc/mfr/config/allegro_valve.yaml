@@ -1,13 +1,15 @@
 ---
+T: 8
 receding_horizon: False
 num_steps: 8
 num_trials: 30
 visualize: True
-experiment_name: 'allegro_valve_test'
+experiment_name: 'allegro_valve_turning'
 mode: 'simulation'  # choose from 'simulation', 'hardware', 'hardware_copy'
 fingers: ['index', 'middle', 'thumb']
-simulator: "isaac_gym" # choose from 'isaac_sim', 'isaac_gym'
+simulator: "isaac_sim" # choose from 'isaac_sim', 'isaac_gym'
 object_type: 'cross_valve'
+obj_dof_code: [1, 1, 1, 1, 1, 1] #[0, 0, 0, 0, 1, 0]
 sim_device: 'cuda:0'
 device: 'cuda:0'
 friction_coefficient: 0.9
@@ -17,9 +19,7 @@ random_robot_pose: False
 gravity: True  # whether to use gravity in the simulation
 goal: [-0.785398]
 controllers:
-  T: 8
-  # N: 16
-  N: 4
+  N: 18
   alpha_J: 5.0e-3
   alpha_C: 1
   step_size: 0.1

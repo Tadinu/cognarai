@@ -3,6 +3,7 @@ import os
 import argparse
 import logging
 import time
+from typing import cast
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -34,15 +35,17 @@ torch.set_printoptions(precision=2, sci_mode=False)
 
 # Cognarai
 from cognarai.mppi.utils.transport import torch_to_bytes, bytes_to_torch
-from cognarai.mpc.mfr.allegro_env import AllegroContactProblem, PositionControlConstrainedSVGDMPC
-from cognarai.mpc.mfr.allegro_screwdriver import AllegroScrewdriver
+from cognarai.mpc.mfr.allegro_env import (AllegroContactProblem, PositionControlConstrainedSVGDMPC,
+                                          AllegroManipEnv, get_task_config)
 from cognarai.mpc.mfr.allegro_cuboid_turning import AllegroCuboidTurning
 from cognarai.mpc.mfr.allegro_cuboid_alignment_w_force import AllegroCuboidAlignment
+from cognarai.mpc.mfr.allegro_cuboid_turning_env import AllegroCuboidTurningEnv, AllegroCuboidTurningCfg
+from cognarai.mpc.mfr.allegro_cuboid_alignment_env import AllegroCuboidAlignmentEnv, AllegroCuboidAlignmentCfg
 from cognarai.mpc.mfr.allegro_reorientation import AllegroReorientation
-from cognarai.mpc.mfr.allegro_env import AllegroManipEnv, get_task_config
-from cognarai.mpc.mfr.allegro_cuboid_turning_env import AllegroCuboidTurningEnv
-from cognarai.mpc.mfr.allegro_valve_turning_env import AllegroValveTurningEnv
-from cognarai.mpc.mfr.allegro_screwdriver_env import AllegroScrewdriverEnv
+from cognarai.mpc.mfr.allegro_valve_turning import AllegroValveTurning
+from cognarai.mpc.mfr.allegro_valve_turning_env import AllegroValveTurningEnv, AllegroValveTurningCfg
+from cognarai.mpc.mfr.allegro_screwdriver import AllegroScrewdriver
+from cognarai.mpc.mfr.allegro_screwdriver_env import AllegroScrewdriverEnv, AllegroScrewdriverCfg
 from cognarai.mpc.mfr.utils.allegro_utils import *
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -50,7 +53,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_env(task: str, task_config: dict) -> AllegroManipEnv:
     if task == 'screwdriver_turning':
-        return AllegroScrewdriverEnv(fingers=task_config['fingers']
+        return AllegroScrewdriverEnv(task_config,
                                      # control_mode='joint_impedance',
                                      # viewer=True,
                                      # steps_per_action=60,
@@ -62,7 +65,7 @@ def get_env(task: str, task_config: dict) -> AllegroManipEnv:
                                      # gravity=task_config['gravity']
                                      )
     elif task == 'valve_turning':
-        return AllegroValveTurningEnv(fingers=task_config['fingers'],
+        return AllegroValveTurningEnv(task_config,
                                       # control_mode='joint_impedance',
                                       # viewer=True,
                                       # steps_per_action=60,
@@ -75,11 +78,9 @@ def get_env(task: str, task_config: dict) -> AllegroManipEnv:
                                       # random_robot_pose=task_config['random_robot_pose']
                                       )
     elif task == 'cuboid_turning':
-        return AllegroCuboidTurningEnv(fingers=task_config['fingers'])
+        return AllegroCuboidTurningEnv(task_config)
     elif task == 'cuboid_alignment':
-        """
-        return AllegroCuboidAlignmentEnv()
-        """
+        return AllegroCuboidAlignmentEnv(task_config)
     elif task == 'reorientation':
         """
         return AllegroReorientationEnv()
@@ -95,7 +96,7 @@ class MFRPlanner(object):
         task_config['task'] = args.task
 
         # Env
-        self.env = env
+        self.env: AllegroManipEnv = env
 
         # Set up the kinematic chain
         self.chain = pk.build_chain_from_urdf(open(env.manip_cfg.hand_urdf_path).read())
@@ -157,8 +158,7 @@ class MFRPlanner(object):
 
         # setup the pregrasp problem
         task = params['task']
-        # task == 'cuboid_turning' or
-        pregrasp_flag = not (task == 'reorientation' or task == 'cuboid_alignment')
+        pregrasp_flag = not (task == 'reorientation')
         if pregrasp_flag:
             print("Pregrasping...")
             pregrasp_succ = False
@@ -167,12 +167,13 @@ class MFRPlanner(object):
                 pregrasp_problem = AllegroContactProblem(
                     dx=pregrasp_dx,
                     du=pregrasp_du,
-                    start=start[:pregrasp_dx + obj_dof],
+                    start=start,  # start[:pregrasp_dx + obj_dof]
                     goal=None,
                     T=4,
                     chain=params['chain'],
                     device=params['device'],
-                    object_asset_pos=torch.zeros(3),
+                    object_asset_pos=torch.tensor(self.env.cfg.object_cfg.init_state.pos,
+                                                  device=self.device).float(),
                     object_urdf_path=self.env.cfg.object_urdf_path,
                     object_type=params['object_type'],
                     world_trans=self.env.world_trans,
@@ -195,12 +196,12 @@ class MFRPlanner(object):
                     tmp = start[pregrasp_dx:pregrasp_dx + obj_dof].unsqueeze(0).repeat(traj_for_viz.shape[0], 1)
                     tmp_2 = torch.zeros((traj_for_viz.shape[0], 1)).to(traj_for_viz.device)  # the top jint
                     traj_for_viz = torch.cat((traj_for_viz, tmp, tmp_2), dim=1)
-                    viz_fpath = pathlib.PurePath.joinpath(fpath, "pregrasp")
+                    viz_fpath = pathlib.PurePath.joinpath(self.fpath, "pregrasp")
                     img_fpath = pathlib.PurePath.joinpath(viz_fpath, 'img')
                     gif_fpath = pathlib.PurePath.joinpath(viz_fpath, 'gif')
                     pathlib.Path.mkdir(img_fpath, parents=True, exist_ok=True)
                     pathlib.Path.mkdir(gif_fpath, parents=True, exist_ok=True)
-                    visualize_trajectory(traj_for_viz, pregrasp_problem.viz_contact_scenes, viz_fpath,
+                    visualize_trajectory(traj_for_viz, pregrasp_problem.contact_scenes, viz_fpath,
                                          pregrasp_problem.fingers, pregrasp_problem.obj_dof + obj_joint_dim,
                                          arm_dof=0)
 
@@ -229,6 +230,8 @@ class MFRPlanner(object):
         start = state[0].to(device=params['device'])
         task = params['task']
         if task == 'screwdriver_turning':
+            self.env = cast(AllegroScrewdriverEnv, self.env)
+            self.env.cfg = cast(AllegroScrewdriverCfg, self.env.cfg)
             manipulation_problem = AllegroScrewdriver(
                 start=start[:robot_dof + obj_dof],
                 goal=params['goal'],
@@ -250,6 +253,8 @@ class MFRPlanner(object):
                 contact_region=params['contact_region'],
             )
         elif task == 'valve_turning':
+            self.env = cast(AllegroValveTurningEnv, self.env)
+            self.env.cfg = cast(AllegroValveTurningCfg, self.env.cfg)
             manipulation_problem = AllegroValveTurning(
                 start=start,
                 goal=params['goal'],
@@ -266,12 +271,15 @@ class MFRPlanner(object):
                 obj_dof_code=params['obj_dof_code'],
             )
         elif task == 'cuboid_turning':
+            self.env = cast(AllegroCuboidTurningEnv, self.env)
+            self.env.cfg = cast(AllegroCuboidTurningCfg, self.env.cfg)
             manipulation_problem = AllegroCuboidTurning(
                 start=start,
                 goal=params['goal'],
                 T=params['T'],
                 chain=params['chain'],
-                object_asset_pos=torch.zeros(3),
+                object_asset_pos=torch.tensor(self.env.cfg.object_cfg.init_state.pos,
+                                              device=self.device).float(),
                 object_urdf_path=self.env.cfg.object_urdf_path,
                 world_trans=self.env.world_trans,
                 object_location=params['object_location'],
@@ -283,6 +291,8 @@ class MFRPlanner(object):
                 obj_gravity=params['obj_gravity'],
             )
         elif task == 'cuboid_alignment':
+            self.env = cast(AllegroCuboidAlignmentEnv, self.env)
+            self.env.cfg = cast(AllegroCuboidAlignmentCfg, self.env.cfg)
             manipulation_problem = AllegroCuboidAlignment(
                 start=start,
                 goal=params['goal'],
@@ -330,14 +340,14 @@ class MFRPlanner(object):
         action_full = torch.zeros((1, self.env.action_space.shape[1]), device=self.env.device)
         for k in range(params['num_steps']):
             state = self.env.get_state()
-            start = state[0, :robot_dof + obj_dof].to(device=params['device'])
+            start = state[0].to(device=params['device'])
             current_theta = state[:, -obj_dof:].detach().cpu().numpy()
             actual_trajectory.append(start.clone())
             start_time = time.time()
             best_traj, trajectories = manipulation_planner.step(start)
 
             solve_time = time.time() - start_time
-            print(f"Planner solving time: {solve_time}")
+            print(f"Planner solving time: {solve_time}", k)
             if k == 0:
                 warmup_time = solve_time
             else:
@@ -359,7 +369,7 @@ class MFRPlanner(object):
                 gif_fpath = pathlib.PurePath.joinpath(viz_fpath, 'gif')
                 pathlib.Path.mkdir(img_fpath, parents=True, exist_ok=True)
                 pathlib.Path.mkdir(gif_fpath, parents=True, exist_ok=True)
-                visualize_trajectory(traj_for_viz, manipulation_problem.viz_contact_scenes, viz_fpath,
+                visualize_trajectory(traj_for_viz, manipulation_problem.contact_scenes, viz_fpath,
                                      manipulation_problem.fingers, manipulation_problem.obj_dof + obj_joint_dim,
                                      arm_dof=0)
 
@@ -384,7 +394,7 @@ class MFRPlanner(object):
             action_full[:, self.env.actuated_dof_indices] = action
             print(action_full.shape, action_full)
             if step_env:
-                print("Planner stepping")
+                print("Planner stepping", k, self.env.num_envs)
                 self.env.step(action_full)
         return action_full
 

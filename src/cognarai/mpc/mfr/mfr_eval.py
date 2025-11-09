@@ -1,6 +1,4 @@
-import argparse
 import logging
-from tqdm import tqdm
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -36,9 +34,9 @@ def main():
     while True:
         if True:
             act = planner.plan(step_env=True)
-            # if planner.env.is_object_in_contact_with_fingers():
-            # planner.pregrasp()
-            print("ACTION:", act)
+        # if planner.env.is_object_in_contact_with_fingers():
+        # planner.pregrasp()
+        # print("ACTION:", act)
         app.update()
 
     # APP CLOSE

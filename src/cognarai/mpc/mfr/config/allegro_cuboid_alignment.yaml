@@ -4,11 +4,12 @@ receding_horizon: False
 num_steps: 10
 num_trials: 30
 visualize: True
-experiment_name: 'allegro_peg_alignment'
+experiment_name: 'allegro_cuboid_alignment'
 mode: 'simulation'  # choose from 'simulation', 'hardware', 'hardware_copy'
-simulator: "isaac_gym" # choose from 'isaac_sim', 'isaac_gym'
+simulator: "isaac_sim" # choose from 'isaac_sim', 'isaac_gym'
 fingers: ['index', 'middle', 'thumb']
-object_type: 'peg'
+object_type: 'short_cuboid'
+obj_dof_code: [1, 1, 1, 1, 1, 1]
 sim_device: 'cuda:0'
 device: 'cuda:0'
 friction_coefficient: 0.95
@@ -19,7 +20,7 @@ use_arm: False
 gravity: True  # whether to use gravity in the simulation
 goal: [-0.05, 0.0, 0.08, 0, 0, 0]
 controllers:
-  N: 16
+  N: 12
   alpha_J: 5.0e-3
   alpha_C: 1
   step_size: 0.1

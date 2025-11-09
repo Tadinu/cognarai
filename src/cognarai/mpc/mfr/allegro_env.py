@@ -11,7 +11,7 @@ Isaac Lab API (see docs linked in the chat response for references).
 """
 
 from __future__ import annotations
-from typing import Tuple, Optional, Sequence
+from typing import Any, Tuple, Optional
 import os
 from pathlib import Path
 import math
@@ -531,6 +531,7 @@ class AllegroContactProblem(AllegroObjectProblem):
         #     'allegro_hand_hitosashi_finger_finger_link_1'
         # ]
         self.object_type = object_type
+        """
         if object_type == 'cuboid_valve':
             asset_object = MODELS_DIR + '/valve/valve_cuboid.urdf'
         elif object_type == 'cylinder_valve':
@@ -547,16 +548,13 @@ class AllegroContactProblem(AllegroObjectProblem):
             asset_object = MODELS_DIR + '/cuboid_insertion/short_cuboid.urdf'
         elif object_type == 'batarang':
             asset_object = MODELS_DIR + '/reorientation/batarang.urdf'
+        """
         self.object_chain = pk.build_chain_from_urdf(open(object_urdf_path).read()).to(device=self.device)
         self.object_asset_pos = object_asset_pos.clone().detach().to(self.device).float()
 
         self._init_contact_scenes(object_urdf_path, collision_checking)
 
-    def _init_contact_scenes(self, asset_object, collision_checking):
-        object_sdf = pv.RobotSDF(self.object_chain,
-                                 path_prefix=None)  # since we are using primitive shapes for the object, there's no need to define path for stl
-        robot_sdf = pv.RobotSDF(self.chain, path_prefix=ALLEGRO_URDF_DIR)
-
+    def _init_contact_scenes(self, asset_object, collision_checking, visualize_scene: bool = True):
         scene_trans = self.world_trans.inverse().compose(
             pk.Transform3d(device=self.device).translate(self.object_asset_pos[0], self.object_asset_pos[1],
                                                          self.object_asset_pos[2]))
@@ -573,24 +571,21 @@ class AllegroContactProblem(AllegroObjectProblem):
         if collision_checking:
             collision_check_links.append('allegro_hand_hitosashi_finger_finger_link_2')
             collision_check_links.append('allegro_hand_hitosashi_finger_finger_link_3')
+
+        object_sdf = pv.RobotSDF(self.object_chain,
+                                 path_prefix=None)  # since we are using primitive shapes for the object, there's no need to define path for stl
+        robot_sdf = pv.RobotSDF(self.chain, path_prefix=ALLEGRO_URDF_DIR)
         self.contact_scenes = pv.RobotScene(robot_sdf, object_sdf, scene_trans,
                                             collision_check_links=collision_check_links,
+                                            # collision_check_links=[self.collision_checking_ee_names['thumb']],
                                             softmin_temp=1.0e3,
                                             points_per_link=1000,
                                             partial_patch=False,
                                             # grad_smooth_points=grad_smooth_points,
                                             )
-        object_sdf = pv.RobotSDF(self.object_chain,
-                                 path_prefix=None)  # since we are using primitive shapes for the object, there's no need to define path for stl
-        robot_sdf = pv.RobotSDF(self.chain, path_prefix=ALLEGRO_URDF_DIR)
-        self.viz_contact_scenes = pv.RobotScene(robot_sdf, object_sdf, scene_trans,
-                                                collision_check_links=[self.collision_checking_ee_names['thumb']],
-                                                softmin_temp=1.0e3,
-                                                points_per_link=1000,
-                                                partial_patch=False,
-                                                # grad_smooth_points=grad_smooth_points,
-                                                )
-        # self.viz_contact_scenes.visualize_robot(partial_to_full_state(self.start[:self.robot_dof], fingers=self.fingers, arm_dof=self.arm_dof), None)
+        if visualize_scene:
+            self.contact_scenes.visualize_robot(
+                partial_to_full_state(self.start[:self.robot_dof], fingers=self.fingers, arm_dof=self.arm_dof), None)
 
     def _preprocess(self, xu):
         N = xu.shape[0]
@@ -905,10 +900,11 @@ class AllegroManipEnv(InHandManipulationEnv):
       Switch to velocity control by changing `_apply_action`.
     """
 
-    def __init__(self, cfg: AllegroManipEnvCfg, render_mode: str | None = None, **kwargs):
+    def __init__(self, task_cfg: dict, cfg: AllegroManipEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
         # Config
+        self.task_cfg = task_cfg
         self.manip_cfg = cfg
 
         # World, obj transf
@@ -990,7 +986,7 @@ class AllegroManipEnv(InHandManipulationEnv):
     def get_dof_state(self) -> torch.Tensor:
         return torch.concatenate([self.hand_dof_pos.clone(), self.hand_dof_vel.clone()])
 
-    def get_state(self):
+    def get_state(self) -> dict[str, Any]:
         arm_q = {
             'arm_q': self.hand_dof_pos
         }
@@ -1003,12 +999,12 @@ class AllegroManipEnv(InHandManipulationEnv):
 
         # Finger end-effector positions via body links in Articulation data
         finger_ee_pos = {
-            f"{finger}_pos": self.hand.data.body_link_pos_w[:, self.finger_ee_index[finger], :]
+            f"{finger}_ee_pos": self.hand.data.body_link_pos_w[:, self.finger_ee_index[finger], :]
             for finger in self.finger_names
         }
 
         # Merge results
-        results = {**finger_q, **finger_ee_pos, **arm_q}
+        results = {**arm_q, **finger_q, **finger_ee_pos}
         return results
 
     def is_object_in_contact_with_fingers(self) -> bool:
@@ -1101,23 +1097,18 @@ def get_task_config(task_name: Optional[str] = None):
         task_name = 'cuboid_turning'
     if task_name == 'screwdriver_turning':
         config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_screwdriver.yaml').read_text())
-        config['obj_dof_code'] = [0, 0, 0, 1, 1, 1]
         config['num_env_force'] = 1
     elif task_name == 'valve_turning':
         config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_valve.yaml').read_text())
-        config['obj_dof_code'] = [0, 0, 0, 0, 1, 0]
         config['num_env_force'] = 0
     elif task_name == 'cuboid_turning':
         config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_cuboid_turning.yaml').read_text())
-        config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
         config['num_env_force'] = 0
     elif task_name == 'cuboid_alignment':
         config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_cuboid_alignment.yaml').read_text())
-        config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
         config['num_env_force'] = 1
     elif task_name == 'reorientation':
         config = yaml.safe_load(Path(f'{CONFIG_DIR}/allegro_reorientation.yaml').read_text())
-        config['obj_dof_code'] = [1, 1, 1, 1, 1, 1]
         config['num_env_force'] = 0
     else:
         raise ValueError(f'Unknown task {task_name}')

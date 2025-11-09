@@ -110,7 +110,7 @@ class AllegroValveTurning(AllegroContactProblem):
     def get_initial_xu(self, N):
         """
         use delta joint movement to get the initial trajectory
-        the action (force at the finger tip) is not used. it is randomly intiailized
+        the action (force at the finger tip) is not used. it is randomly initialized
         the actual dynamics model is not used
         """
 
@@ -118,7 +118,7 @@ class AllegroValveTurning(AllegroContactProblem):
         u = 0.025 * torch.randn(N, self.T, 4 * self.num_fingers, device=self.device)
         force = 0.15 * torch.randn(N, self.T, 3 * self.num_fingers, device=self.device)
         u = torch.cat((u, force), dim=-1)
-        x = [self.start.reshape(1, self.dx).repeat(N, 1)]
+        x = [self.start.reshape(1, self.start.shape[0]).repeat(N, 1)]
         for t in range(self.T):
             next_q = x[-1][:, :self.robot_dof] + u[:, t, :self.robot_dof]
             x.append(next_q)
