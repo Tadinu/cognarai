@@ -1,10 +1,10 @@
 # import pytorch3d.transforms as tf
 
 from scipy.spatial.transform import Slerp
-from allegro_valve_roll import AllegroValveTurning
 
 # cognarai
 from cognarai.mpc.mfr.utils.allegro_utils import *
+from cognarai.mpc.mfr.allegro_valve_turning import AllegroValveTurning
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 

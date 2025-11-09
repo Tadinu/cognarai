@@ -33,17 +33,58 @@ import torch
 torch.set_printoptions(precision=2, sci_mode=False)
 
 # Cognarai
-from cognarai.mpc.mfr.allegro_valve_roll import AllegroValveTurning, AllegroContactProblem, \
-    PositionControlConstrainedSVGDMPC
+from cognarai.mppi.utils.transport import torch_to_bytes, bytes_to_torch
+from cognarai.mpc.mfr.allegro_env import AllegroContactProblem, PositionControlConstrainedSVGDMPC
 from cognarai.mpc.mfr.allegro_screwdriver import AllegroScrewdriver
 from cognarai.mpc.mfr.allegro_cuboid_turning import AllegroCuboidTurning
 from cognarai.mpc.mfr.allegro_cuboid_alignment_w_force import AllegroCuboidAlignment
 from cognarai.mpc.mfr.allegro_reorientation import AllegroReorientation
-from cognarai.mpc.mfr.allegro_env import AllegroManipEnv, get_task_config, get_env
+from cognarai.mpc.mfr.allegro_env import AllegroManipEnv, get_task_config
+from cognarai.mpc.mfr.allegro_cuboid_turning_env import AllegroCuboidTurningEnv
+from cognarai.mpc.mfr.allegro_valve_turning_env import AllegroValveTurningEnv
+from cognarai.mpc.mfr.allegro_screwdriver_env import AllegroScrewdriverEnv
 from cognarai.mpc.mfr.utils.allegro_utils import *
-from cognarai.mppi.utils.transport import torch_to_bytes, bytes_to_torch
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def get_env(task: str, task_config: dict) -> AllegroManipEnv:
+    if task == 'screwdriver_turning':
+        return AllegroScrewdriverEnv(fingers=task_config['fingers']
+                                     # control_mode='joint_impedance',
+                                     # viewer=True,
+                                     # steps_per_action=60,
+                                     # friction_coefficient=1.0,
+                                     # device=task_config['sim_device'],
+                                     # video_save_path=img_save_dir,
+                                     # joint_stiffness=task_config['kp'],
+                                     # gradual_control=task_config['gradual_control'],
+                                     # gravity=task_config['gravity']
+                                     )
+    elif task == 'valve_turning':
+        return AllegroValveTurningEnv(fingers=task_config['fingers'],
+                                      # control_mode='joint_impedance',
+                                      # viewer=True,
+                                      # steps_per_action=60,
+                                      # friction_coefficient=1.0,
+                                      # device=task_config['sim_device'],
+                                      # valve_type=task_config['object_type'],
+                                      # video_save_path=img_save_dir,
+                                      # joint_stiffness=task_config['kp'],
+                                      # gravity=task_config['gravity'],
+                                      # random_robot_pose=task_config['random_robot_pose']
+                                      )
+    elif task == 'cuboid_turning':
+        return AllegroCuboidTurningEnv(fingers=task_config['fingers'])
+    elif task == 'cuboid_alignment':
+        """
+        return AllegroCuboidAlignmentEnv()
+        """
+    elif task == 'reorientation':
+        """
+        return AllegroReorientationEnv()
+        """
+    return None
 
 
 class MFRPlanner(object):

@@ -17,13 +17,13 @@ from torch.func import vmap, jacrev, hessian, jacfwd
 # import pytorch3d.transforms as tf
 
 import matplotlib.pyplot as plt
-from allegro_valve_roll import AllegroValveTurning, AllegroContactProblem, PositionControlConstrainedSVGDMPC
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
 # cognarai
 from cognarai.mpc.mfr.allegro_env import MODELS_DIR, ALLEGRO_URDF_DIR
 from cognarai.mpc.mfr.utils.allegro_utils import *
+from cognarai.mpc.mfr.allegro_valve_turning import AllegroValveTurning
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 

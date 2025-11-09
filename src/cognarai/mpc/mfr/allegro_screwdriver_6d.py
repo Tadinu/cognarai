@@ -12,14 +12,16 @@ import time
 import pytorch_volumetric as pv
 import pytorch_kinematics as pk
 import pytorch_kinematics.transforms as tf
-from torch.func import vmap, jacrev, hessian, jacfwd
 # import pytorch3d.transforms as tf
 
 import matplotlib.pyplot as plt
-from utils.allegro_utils import partial_to_full_state, full_to_partial_state, state2ee_pos, visualize_trajectory
-from allegro_valve_roll import AllegroValveTurning, AllegroContactProblem, PositionControlConstrainedSVGDMPC
-from allegro_env import AllegroScrewdriver6DEnv
-from cognarai.mpc.mfr.allegro_env import ALLEGRO_URDF_DIR
+
+# cognarai
+from cognarai.mpc.mfr.utils.allegro_utils import partial_to_full_state, full_to_partial_state, state2ee_pos, \
+    visualize_trajectory
+from cognarai.mpc.mfr.allegro_valve_turning import AllegroValveTurning
+from cognarai.mpc.mfr.allegro_screwdriver_env import AllegroScrewdriverEnv
+from cognarai.mpc.mfr.allegro_env import AllegroContactProblem, PositionControlConstrainedSVGDMPC
 
 CCAI_PATH = pathlib.Path(__file__).resolve().parents[1]
 
@@ -171,7 +173,7 @@ def do_trial(env, params, fpath, sim_viz_env=None):
     else:
         turn_problem_fingers = params['fingers']
         turn_problem_start = start[:4 * num_fingers + obj_dof]
-    turn_problem = AllegroScrewdriver(
+    turn_problem = AllegroScrewdriver6D(
         start=turn_problem_start,
         goal=params['valve_goal'],
         T=params['T'],

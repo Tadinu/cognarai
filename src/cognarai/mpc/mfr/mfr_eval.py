@@ -13,8 +13,8 @@ from cognarai.mpc.mfr.mfr_planner import args, app_launcher
 
 # Cognarai
 from cognarai.isaac_app import IsaacApp
-from cognarai.mpc.mfr.mfr_planner import MFRPlanner
-from cognarai.mpc.mfr.allegro_env import get_task_config, get_env
+from cognarai.mpc.mfr.mfr_planner import MFRPlanner, get_env
+from cognarai.mpc.mfr.allegro_env import get_task_config
 
 
 def main():
